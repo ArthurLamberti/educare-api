@@ -17,14 +17,14 @@ After change 01 the API runs on PostgreSQL with Flyway. There is no authenticati
 ## Decisions
 
 ### Tenant identification: `X-Tenant` header + `tenant_id` column
-The web app maps `<slug>.educare.com` to the slug and sends `X-Tenant: <slug>` on every call. A servlet filter resolves the slug to a tenant (cached in memory, 404 if unknown) before Spring Security runs. Tables owned by a tenant carry `tenant_id bigint not null references tenants`. The API does not parse the `Host` itself because it is never called by browsers.
+The web app maps `<slug>.educare.com` to the slug and sends `X-Tenant: <slug>` on every call. A filter resolves the slug to a tenant (cached in memory, 404 if unknown). It is the first filter of the Spring Security chain (before `SecurityContextHolderFilter`) rather than a separate servlet filter, so MockMvc tests with `springSecurity()` exercise it too; the platform-key check is a sibling filter in the same position. Tables owned by a tenant carry `tenant_id bigint not null references tenants`. The API does not parse the `Host` itself because it is never called by browsers.
 
 ### Isolation via Hibernate `@TenantId`
 Tenant-owned entities extend a `TenantOwnedEntity` mapped superclass with a `@TenantId tenantId` field, and a `CurrentTenantIdentifierResolver` returns the tenant resolved for the request. Hibernate then filters every query and stamps every insert automatically. Alternative considered: explicit `findByTenantId...` repository methods - rejected because one forgotten method leaks data across schools. Native queries must add the filter by hand; the code review checklist and a test per repository guard this.
 `tenants` itself and the platform endpoint are not tenant-owned.
 
 ### Uniqueness per tenant
-Unique constraints become composite: `users (tenant_id, lower(email))`. Login looks the user up by tenant + email.
+Unique constraints become composite: `users (tenant_id, email)`. Emails are normalized to lowercase on write (with a `CHECK (email = lower(email))` constraint), which makes the plain unique constraint case-insensitive and keeps lookups index-friendly. Login looks the user up by tenant + email.
 
 ### Authentication: JWT (HS256) via Spring Security resource server
 `spring-boot-starter-security` + `spring-boot-starter-oauth2-resource-server`, with a `NimbusJwtEncoder/Decoder` on a symmetric secret (`EDUCARE_JWT_SECRET`, at least 32 bytes). Claims: `sub` (user id), `tid` (tenant id), `role`, `iat`, `exp` (12h). Stateless sessions, CSRF disabled (no cookies on the API).

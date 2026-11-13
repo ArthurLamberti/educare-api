@@ -1,41 +1,33 @@
 package br.com.educare.api.student
 
+import br.com.educare.api.support.IntegrationTest
+import br.com.educare.api.support.auth
+import br.com.educare.api.support.json
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.boot.test.context.SpringBootTest
-import br.com.educare.api.TestcontainersConfiguration
-import org.springframework.context.annotation.Import
-import org.springframework.http.MediaType
-import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.delete
 import org.springframework.test.web.servlet.get
 import org.springframework.test.web.servlet.post
 import org.springframework.test.web.servlet.put
-import org.springframework.test.web.servlet.setup.MockMvcBuilders
-import org.springframework.web.context.WebApplicationContext
 
-@SpringBootTest
-@Import(TestcontainersConfiguration::class)
-class StudentControllerTest {
-
-    @Autowired
-    lateinit var context: WebApplicationContext
+class StudentControllerTest : IntegrationTest() {
 
     @Autowired
     lateinit var repository: StudentRepository
 
-    lateinit var mockMvc: MockMvc
+    lateinit var token: String
 
     @BeforeEach
-    fun setup() {
-        repository.deleteAll()
-        mockMvc = MockMvcBuilders.webAppContextSetup(context).build()
+    fun loginAsTeacher() {
+        provisionSchool("alpha")
+        createTeacher("alpha", "teacher@alpha.com")
+        token = tokenFor("alpha", "teacher@alpha.com")
     }
 
     private fun create(name: String, email: String) = mockMvc.post("/api/students") {
-        contentType = MediaType.APPLICATION_JSON
-        content = """{"name":"$name","email":"$email","birthDate":"2010-05-20"}"""
+        auth("alpha", token)
+        json("""{"name":"$name","email":"$email","birthDate":"2010-05-20"}""")
     }
 
     @Test
@@ -48,26 +40,26 @@ class StudentControllerTest {
 
         val id = repository.findAll().single().id
 
-        mockMvc.get("/api/students/$id").andExpect {
+        mockMvc.get("/api/students/$id") { auth("alpha", token) }.andExpect {
             status { isOk() }
             jsonPath("$.email") { value("maria@educare.com") }
         }
 
         mockMvc.put("/api/students/$id") {
-            contentType = MediaType.APPLICATION_JSON
-            content = """{"name":"Maria Silva","email":"maria@educare.com"}"""
+            auth("alpha", token)
+            json("""{"name":"Maria Silva","email":"maria@educare.com"}""")
         }.andExpect {
             status { isOk() }
             jsonPath("$.name") { value("Maria Silva") }
         }
 
-        mockMvc.get("/api/students").andExpect {
+        mockMvc.get("/api/students") { auth("alpha", token) }.andExpect {
             status { isOk() }
             jsonPath("$.content.length()") { value(1) }
         }
 
-        mockMvc.delete("/api/students/$id").andExpect { status { isNoContent() } }
-        mockMvc.get("/api/students/$id").andExpect { status { isNotFound() } }
+        mockMvc.delete("/api/students/$id") { auth("alpha", token) }.andExpect { status { isNoContent() } }
+        mockMvc.get("/api/students/$id") { auth("alpha", token) }.andExpect { status { isNotFound() } }
     }
 
     @Test
@@ -83,5 +75,10 @@ class StudentControllerTest {
     fun `returns 409 for duplicate email`() {
         create("Joao", "joao@educare.com").andExpect { status { isCreated() } }
         create("Joao 2", "joao@educare.com").andExpect { status { isConflict() } }
+    }
+
+    @Test
+    fun `requires authentication`() {
+        mockMvc.get("/api/students") { header("X-Tenant", "alpha") }.andExpect { status { isUnauthorized() } }
     }
 }

@@ -16,6 +16,22 @@ management:
       exposure:
         include: health,info
 
+educare:
+  security:
+    jwt-secret: ${EDUCARE_JWT_SECRET:}
+    platform-key: ${EDUCARE_PLATFORM_KEY:}
+    token-ttl: 12h
+
+---
+spring:
+  config:
+    activate:
+      on-profile: dev | test
+educare:
+  security:
+    jwt-secret: ${EDUCARE_JWT_SECRET:dev-only-jwt-secret-not-for-production-0123456789}
+    platform-key: ${EDUCARE_PLATFORM_KEY:dev-platform-key}
+
 ---
 spring:
   config:

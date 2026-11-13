@@ -17,12 +17,20 @@ class GlobalExceptionHandler {
     fun handleConflict(ex: ConflictException): ProblemDetail =
         ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.message ?: "Conflict")
 
+    @ExceptionHandler(UnauthorizedException::class)
+    fun handleUnauthorized(ex: UnauthorizedException): ProblemDetail =
+        ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, ex.message ?: "Unauthorized")
+
+    @ExceptionHandler(FieldValidationException::class)
+    fun handleFieldValidation(ex: FieldValidationException): ProblemDetail =
+        invalidData(mapOf(ex.field to (ex.message ?: "invalid")))
+
     @ExceptionHandler(MethodArgumentNotValidException::class)
     fun handleValidation(ex: MethodArgumentNotValidException): ProblemDetail =
+        invalidData(ex.bindingResult.fieldErrors.associate { it.field to (it.defaultMessage ?: "invalid") })
+
+    private fun invalidData(errors: Map<String, String>) =
         ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Invalid data").apply {
-            setProperty(
-                "errors",
-                ex.bindingResult.fieldErrors.associate { it.field to (it.defaultMessage ?: "invalid") },
-            )
+            setProperty("errors", errors)
         }
 }

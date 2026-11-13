@@ -1,15 +1,11 @@
 package br.com.educare.api
 
+import br.com.educare.api.support.IntegrationTest
 import org.junit.jupiter.api.Test
-import org.springframework.boot.test.context.SpringBootTest
-import org.springframework.context.annotation.Import
 
-@SpringBootTest
-@Import(TestcontainersConfiguration::class)
-class EducareApiApplicationTests {
+class EducareApiApplicationTests : IntegrationTest() {
 
-	@Test
-	fun contextLoads() {
-	}
-
+    @Test
+    fun contextLoads() {
+    }
 }

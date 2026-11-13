@@ -1,10 +1,9 @@
-# Spec Delta
+# tenancy Specification
 
 ## Purpose
-
 Isolates each school's data: provisions schools (tenants) and resolves the tenant of every request so users only ever see and change data of their own school.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Tenant provisioning
 The system SHALL let the platform operator create a tenant with a slug (lowercase letters, digits and hyphens, 3-40 chars, unique), a display name, an IANA time zone, and a first admin user (name, email, password), through `POST /api/platform/tenants`, authorized only by the platform API key in the `X-Platform-Key` header.
@@ -57,3 +56,14 @@ The system SHALL include the tenant slug, name and time zone in the current user
 #### Scenario: Current user includes tenant
 - **WHEN** an authenticated user requests `GET /api/auth/me`
 - **THEN** the response includes `tenant.slug`, `tenant.name` and `tenant.timeZone`
+
+### Requirement: Public school information
+The system SHALL return the resolved tenant's slug, name and time zone through `GET /api/tenant` without authentication, so clients can show the school before login. Unknown tenants SHALL get 404 like any other request.
+
+#### Scenario: Known school
+- **WHEN** a client requests `GET /api/tenant` with `X-Tenant: alpha` and no token
+- **THEN** the system responds 200 with `slug`, `name` and `timeZone`
+
+#### Scenario: Unknown school
+- **WHEN** a client requests `GET /api/tenant` with `X-Tenant: nope`
+- **THEN** the system responds 404
