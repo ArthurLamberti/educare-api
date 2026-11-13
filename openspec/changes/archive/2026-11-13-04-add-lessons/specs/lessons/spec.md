@@ -51,7 +51,7 @@ The system SHALL let the lesson's teacher cancel a `SCHEDULED` lesson through `P
 - **THEN** the system responds 200 with status `CANCELED` and the time becomes free for new lessons
 
 ### Requirement: List and read lessons by role
-The system SHALL list lessons through `GET /api/lessons`, paginated and ordered by `startsAt` ascending, filtered by optional `from`/`to` instants, `status` and (for teachers and admins) `studentId`. A `TEACHER` SHALL see only their lessons, a `STUDENT` only their own lessons, and an `ADMIN` all lessons of the tenant. Each lesson SHALL include teacher and student id and name. Reading a lesson the caller may not see SHALL respond 404.
+The system SHALL list lessons through `GET /api/lessons`, paginated and ordered by `startsAt` ascending, filtered by optional `from`/`to` instants (`startsAt >= from`, `startsAt < to`), `status`, `studentId` (teachers and admins) and `teacherId` (admins), and sortable with `sort=startsAt,desc`. A `TEACHER` SHALL see only their lessons, a `STUDENT` only their own lessons, and an `ADMIN` all lessons of the tenant. Each lesson SHALL include teacher and student id and name. Reading a lesson the caller may not see SHALL respond 404.
 
 #### Scenario: Student sees own lessons
 - **WHEN** a student requests `GET /api/lessons?from=<now>`

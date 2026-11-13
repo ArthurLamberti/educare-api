@@ -1,5 +1,6 @@
 package br.com.educare.api.common
 
+import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.http.HttpStatus
 import org.springframework.http.ProblemDetail
 import org.springframework.web.bind.MethodArgumentNotValidException
@@ -16,6 +17,18 @@ class GlobalExceptionHandler {
     @ExceptionHandler(ConflictException::class)
     fun handleConflict(ex: ConflictException): ProblemDetail =
         ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.message ?: "Conflict")
+
+    /** A database constraint caught what the service checks missed (e.g. a concurrent request). */
+    @ExceptionHandler(DataIntegrityViolationException::class)
+    fun handleIntegrity(ex: DataIntegrityViolationException): ProblemDetail {
+        val message = ex.mostSpecificCause.message.orEmpty()
+        val detail = when {
+            "ex_lessons_teacher_overlap" in message -> "The teacher already has a lesson at this time"
+            "ex_lessons_student_overlap" in message -> "The student already has a lesson at this time"
+            else -> "The data conflicts with existing records"
+        }
+        return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, detail)
+    }
 
     @ExceptionHandler(UnauthorizedException::class)
     fun handleUnauthorized(ex: UnauthorizedException): ProblemDetail =

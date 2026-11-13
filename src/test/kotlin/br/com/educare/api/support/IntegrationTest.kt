@@ -38,7 +38,7 @@ abstract class IntegrationTest {
 
     @BeforeEach
     fun resetState() {
-        jdbc.execute("TRUNCATE students, users, tenants RESTART IDENTITY CASCADE")
+        jdbc.execute("TRUNCATE lessons, students, users, tenants RESTART IDENTITY CASCADE")
         tenantDirectory.clear()
         userStatus.clear()
         mockMvc = MockMvcBuilders.webAppContextSetup(context).apply<org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder>(springSecurity()).build()
