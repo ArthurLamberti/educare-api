@@ -30,4 +30,9 @@ interface StudentRepository : JpaRepository<Student, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select s from Student s where s.user.id = :userId")
     fun findByUserIdForUpdate(userId: Long): Student?
+
+    /** Locks the student so changes to their cards (and the card limit) apply one after the other. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select s from Student s where s.id = :id")
+    fun findByIdForUpdate(id: Long): Student?
 }

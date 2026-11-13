@@ -42,26 +42,14 @@ class ReviewControllerTest : IntegrationTest() {
         clock.now = day1
     }
 
-    /** A deck of [cards] cards (fronts "c0", "c1", ...) proposed to [students]; returns deck id and card ids in order. */
-    private fun deck(cards: Int, vararg students: Long, title: String = "Animals"): Pair<Long, List<Long>> {
-        val body = mockMvc.post("/api/decks") {
-            auth("alpha", ana)
-            json("""{"title":"$title"}""")
-        }.andReturn().response.contentAsString
-        val deckId = jsonMapper.readTree(body).get("id").asLong()
+    /** [count] cards (fronts "c0", "c1", ...) of a student; returns their ids in creation order. */
+    private fun cards(count: Int, studentId: Long = mariaId): List<Long> {
         jdbc.update(
-            """insert into cards (tenant_id, deck_id, front, back, position, created_at, updated_at)
-               select 1, ?, 'c' || g, 'b' || g, g, now(), now() from generate_series(0, ? - 1) g""",
-            deckId, cards,
+            """insert into cards (tenant_id, student_id, front, back, created_at, updated_at)
+               select 1, ?, 'c' || g, 'b' || g, now(), now() from generate_series(0, ? - 1) g order by g""",
+            studentId, count,
         )
-        if (students.isNotEmpty()) {
-            mockMvc.post("/api/decks/$deckId/students") {
-                auth("alpha", ana)
-                json("""{"studentIds":${students.joinToString(",", "[", "]")}}""")
-            }
-        }
-        val ids = jdbc.queryForList("select id from cards where deck_id = ? order by position", Long::class.java, deckId)
-        return deckId to ids.filterNotNull()
+        return jdbc.queryForList("select id from cards where student_id = ? order by id", Long::class.java, studentId).filterNotNull()
     }
 
     private fun rate(cardId: Long, rating: String = "GOOD", token: String = maria) = mockMvc.post("/api/reviews") {
@@ -71,7 +59,7 @@ class ReviewControllerTest : IntegrationTest() {
 
     @Test
     fun `rating a new card GOOD schedules it for the start of tomorrow`() {
-        val (_, cards) = deck(1, mariaId)
+        val cards = cards(1)
         rate(cards[0]).andExpect {
             status { isOk() }
             jsonPath("$.intervalDays") { value(1) }
@@ -83,17 +71,16 @@ class ReviewControllerTest : IntegrationTest() {
     }
 
     @Test
-    fun `cards of decks not proposed to the student are not found`() {
-        val (deckId, cards) = deck(1, joaoId)
+    fun `cards of another student are not found`() {
+        val cards = cards(1, joaoId)
         rate(cards[0]).andExpect { status { isNotFound() } }
-        mockMvc.get("/api/reviews/queue?deckId=$deckId") { auth("alpha", maria) }.andExpect { status { isNotFound() } }
         rate(cards[0], token = ana).andExpect { status { isForbidden() } }
         rate(cards[0], "MAYBE", token = joao).andExpect { status { isBadRequest() } }
     }
 
     @Test
     fun `consecutive ratings build on each other`() {
-        val (_, cards) = deck(1, mariaId)
+        val cards = cards(1)
         rate(cards[0])
         clock.now = day2
         rate(cards[0]).andExpect {
@@ -110,12 +97,13 @@ class ReviewControllerTest : IntegrationTest() {
 
     @Test
     fun `queue lists due cards first, then up to 20 new cards`() {
-        val (deckId, cards) = deck(33, mariaId)
+        val cards = cards(33)
+        cards(2, joaoId)
         // day 1: three cards learned, due at the start of day 2
         rate(cards[2]); rate(cards[0]); rate(cards[1])
         clock.now = day2
         // make the due order explicit: card 1 is the oldest due
-        jdbc.update("update card_reviews set due_at = due_at - interval '1 hour' where card_id = ?", cards[1])
+        jdbc.update("update cards set due_at = due_at - interval '1 hour' where id = ?", cards[1])
 
         mockMvc.get("/api/reviews/queue") { auth("alpha", maria) }.andExpect {
             status { isOk() }
@@ -129,15 +117,13 @@ class ReviewControllerTest : IntegrationTest() {
             jsonPath("$.cards[3].cardId") { value(cards[3]) }
             jsonPath("$.cards[3].isNew") { value(true) }
             jsonPath("$.cards[3].front") { value("c3") }
-            jsonPath("$.cards[3].deckTitle") { value("Animals") }
             jsonPath("$.nextDueAt") { value(null as Any?) }
         }
-        mockMvc.get("/api/reviews/queue?deckId=$deckId") { auth("alpha", maria) }.andExpect { jsonPath("$.cards", hasSize<Any>(23)) }
     }
 
     @Test
     fun `no new cards once the daily allowance is used`() {
-        val (_, cards) = deck(25, mariaId)
+        val cards = cards(25)
         cards.take(20).forEach { rate(it) }
         mockMvc.get("/api/reviews/queue") { auth("alpha", maria) }.andExpect {
             jsonPath("$.dueCount") { value(0) }
@@ -154,19 +140,8 @@ class ReviewControllerTest : IntegrationTest() {
     }
 
     @Test
-    fun `allowance is per deck`() {
-        val (_, animals) = deck(25, mariaId, title = "Animals")
-        deck(3, mariaId, title = "Colors")
-        animals.take(20).forEach { rate(it) }
-        mockMvc.get("/api/reviews/queue") { auth("alpha", maria) }.andExpect {
-            jsonPath("$.newCount") { value(3) }
-            jsonPath("$.cards[*].deckTitle") { value(contains("Colors", "Colors", "Colors")) }
-        }
-    }
-
-    @Test
     fun `again cards come back after 10 minutes`() {
-        val (_, cards) = deck(1, mariaId)
+        val cards = cards(1)
         rate(cards[0], "AGAIN")
         mockMvc.get("/api/reviews/queue") { auth("alpha", maria) }.andExpect {
             jsonPath("$.cards", hasSize<Any>(0))
@@ -180,17 +155,20 @@ class ReviewControllerTest : IntegrationTest() {
     }
 
     @Test
-    fun `teacher sees per-student progress`() {
-        val (deckId, cards) = deck(30, mariaId, joaoId)
+    fun `teacher sees progress of each of their students`() {
+        val cards = cards(30)
+        cards(30, joaoId)
+        val other = createStudent("alpha", bob, "lia@alpha.com", name = "Lia")
         // Maria: 3 learning cards (one due today after AGAIN), 1 mature card
         rate(cards[0]); rate(cards[1]); rate(cards[2], "AGAIN"); rate(cards[3])
-        jdbc.update("update card_reviews set interval_days = 30 where card_id = ?", cards[3])
+        jdbc.update("update cards set interval_days = 30 where id = ?", cards[3])
         // an old review does not count in the last 7 days
         jdbc.update("update review_events set reviewed_at = reviewed_at - interval '8 days' where card_id = ?", cards[0])
 
-        mockMvc.get("/api/decks/$deckId/progress") { auth("alpha", ana) }.andExpect {
+        mockMvc.get("/api/flashcards/progress") { auth("alpha", ana) }.andExpect {
             status { isOk() }
             jsonPath("$[*].name") { value(contains("Joao", "Maria")) }
+            jsonPath("$[0].cards") { value(30) }
             jsonPath("$[0].newCards") { value(30) }
             jsonPath("$[0].learning") { value(0) }
             jsonPath("$[1].newCards") { value(26) }
@@ -199,26 +177,24 @@ class ReviewControllerTest : IntegrationTest() {
             jsonPath("$[1].dueToday") { value(1) }
             jsonPath("$[1].reviewsLast7Days") { value(3) }
         }
-        mockMvc.get("/api/reviews/progress") { auth("alpha", maria) }.andExpect {
-            jsonPath("$[0].deckTitle") { value("Animals") }
-            jsonPath("$[0].newCards") { value(26) }
-            jsonPath("$[0].dueToday") { value(1) }
-            jsonPath("$[0].newToday") { value(16) }
+        mockMvc.get("/api/flashcards/progress") { auth("alpha", bob) }.andExpect {
+            jsonPath("$[*].studentId") { value(contains(other.toInt())) }
+            jsonPath("$[0].cards") { value(0) }
         }
-    }
-
-    @Test
-    fun `progress of another teacher's deck is not found`() {
-        val (deckId, _) = deck(1, mariaId)
-        mockMvc.get("/api/decks/$deckId/progress") { auth("alpha", bob) }.andExpect { status { isNotFound() } }
-        mockMvc.get("/api/decks/$deckId/progress") { auth("alpha", maria) }.andExpect { status { isForbidden() } }
+        mockMvc.get("/api/reviews/progress") { auth("alpha", maria) }.andExpect {
+            jsonPath("$.studentId") { value(mariaId) }
+            jsonPath("$.newCards") { value(26) }
+            jsonPath("$.dueToday") { value(1) }
+            jsonPath("$.newToday") { value(16) }
+        }
+        mockMvc.get("/api/flashcards/progress") { auth("alpha", maria) }.andExpect { status { isForbidden() } }
     }
 
     @Test
     fun `deleting a card removes its review state`() {
-        val (_, cards) = deck(2, mariaId)
+        val cards = cards(2)
         rate(cards[0])
         mockMvc.delete("/api/cards/${cards[0]}") { auth("alpha", ana) }.andExpect { status { isNoContent() } }
-        assert(jdbc.queryForObject("select count(*) from card_reviews", Long::class.java) == 0L)
+        assert(jdbc.queryForObject("select count(*) from review_events", Long::class.java) == 0L)
     }
 }

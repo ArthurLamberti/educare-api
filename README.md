@@ -107,7 +107,28 @@ curl -s "localhost:8080/api/lessons?from=$(date -u +%FT%TZ)&status=SCHEDULED" \
 ```
 
 Response fields: `id`, `teacherId`, `teacherName`, `studentId`, `studentName`, `startsAt`, `endsAt`,
-`durationMinutes`, `topic`, `notes`, `status`, `createdAt`, `updatedAt`.
+`durationMinutes`, `topic`, `notes`, `status`, `seriesId` (null unless created by a series), `createdAt`, `updatedAt`.
+
+### Weekly lessons (series)
+
+A teacher can repeat a lesson every week on one or more weekdays, with **no end date**. The series
+holds the school-local time (`startTime`), so lessons stay at the same wall-clock time across DST changes.
+Lessons are created for the next **8 weeks**; a job (every 6 hours, not in the `test` profile) keeps
+that horizon filled, skipping slots that became busy, and ends series of inactive students.
+
+| Endpoint | Who | Notes |
+|---|---|---|
+| `POST /api/lesson-series` | teacher | `studentId`, `weekdays` (e.g. `["TUESDAY","THURSDAY"]`), `startsOn` (school date, not in the past), `startTime` (`HH:mm`, school time), `durationMinutes` (15-240), `topic`, `notes?`. All or nothing: if any lesson clashes → 409 listing the busy times. Answers `series` and `lessonsCreated` |
+| `GET /api/lesson-series` | all | active series: teachers theirs, students theirs, admins all; `nextLessonAt` |
+| `POST /api/lesson-series/{id}/end` `{"from?"}` | the series' teacher | cancels its scheduled lessons from `from` (school date, default today) and stops it; already ended → 409. Answers `series` and `lessonsCanceled` |
+
+Lessons of a series are ordinary lessons: they can be edited, canceled or moved one by one.
+
+```bash
+curl -s localhost:8080/api/lesson-series -H 'X-Tenant: demo' -H "Authorization: Bearer $TEACHER" \
+  -H 'Content-Type: application/json' \
+  -d '{"studentId":1,"weekdays":["TUESDAY","THURSDAY"],"startsOn":"2030-01-15","startTime":"14:00","durationMinutes":60,"topic":"Conversation"}'
+```
 
 ### Lesson change requests
 
@@ -206,49 +227,34 @@ curl -s -X PUT localhost:8080/api/assignments/1/grade -H 'X-Tenant: demo' -H "Au
   -H 'Content-Type: application/json' -d '{"score":8.5,"feedback":"Good! Watch the irregular verbs.","version":0}'
 ```
 
-### Flashcard decks
+### Flashcards
 
-Teachers write **decks** of **cards** (`front`/`back`, up to 1000 characters each, at most 1000 cards per
-deck) and propose them to their students. `GET /api/decks` is role-aware: teachers get their own decks,
-students the decks proposed to them (archived ones included), admins all.
+Each student has **one list of words** (`front`/`back`, up to 1000 characters each, at most 2000 cards per
+student). Only the student's teacher adds, edits or deletes them; the student reviews them.
 
 | Endpoint | Who | Notes |
 |---|---|---|
-| `POST /api/decks`, `PUT /api/decks/{id}` | teacher | `{"title", "description?"}` |
-| `GET /api/decks`, `GET /api/decks/{id}` | all | newest first; `includeArchived=true` (teachers/admins); `cardCount`, `studentCount` (null for students) |
-| `POST /api/decks/{id}/archive`, `/unarchive` | teacher | archived decks are hidden by default and cannot be proposed (409) |
-| `GET /api/decks/{id}/cards` | all who see the deck | in deck order |
-| `POST /api/decks/{id}/cards` | teacher | `{"front", "back"}`, appended last; 1000 cards → 409 |
-| `PUT /api/cards/{id}`, `DELETE /api/cards/{id}` | teacher | edits keep the card id |
-| `PUT /api/decks/{id}/cards/order` | teacher | `{"cardIds": [...]}`: every card of the deck exactly once (otherwise 400, order unchanged) |
-| `GET /api/decks/{id}/students` | teacher | students who have the deck |
-| `POST /api/decks/{id}/students` | teacher | `{"studentIds": [...]}`: the teacher's active students (400, nothing added); students who already have it are skipped |
-| `DELETE /api/decks/{id}/students/{studentId}` | teacher | the student no longer sees the deck |
+| `GET /api/students/{studentId}/cards` | the student, their teacher, admins | oldest first |
+| `POST /api/students/{studentId}/cards` | the student's teacher | `{"front", "back"}`; 2000 cards → 409 |
+| `POST /api/students/{studentId}/cards/batch` | the student's teacher | `{"cards": [{"front", "back"}, ...]}` (1 to 500), all or nothing: an invalid item → 400 with `errors["cards[i].front"]`, going past 2000 cards → 409 |
+| `GET /api/cards` | student | their own cards |
+| `PUT /api/cards/{id}`, `DELETE /api/cards/{id}` | the student's teacher | edits keep the review state |
+| `GET /api/flashcards/progress` | teacher, admin | per student (teacher: their active students): `cards`, `newCards`, `learning`, `mature`, `dueToday`, `newToday`, `reviewsLast7Days` |
 
 ```bash
-curl -s localhost:8080/api/decks -H 'X-Tenant: demo' -H "Authorization: Bearer $TEACHER" \
-  -H 'Content-Type: application/json' -d '{"title":"Animals","description":"Common animals"}'
-
-curl -s localhost:8080/api/decks/1/cards -H 'X-Tenant: demo' -H "Authorization: Bearer $TEACHER" \
-  -H 'Content-Type: application/json' -d '{"front":"cat","back":"gato"}'
-
-curl -s localhost:8080/api/decks/1/students -H 'X-Tenant: demo' -H "Authorization: Bearer $TEACHER" \
-  -H 'Content-Type: application/json' -d '{"studentIds":[1]}'
-
-curl -s localhost:8080/api/decks -H 'X-Tenant: demo' -H "Authorization: Bearer $STUDENT"
+curl -s localhost:8080/api/students/1/cards/batch -H 'X-Tenant: demo' -H "Authorization: Bearer $TEACHER" \
+  -H 'Content-Type: application/json' -d '{"cards":[{"front":"cat","back":"gato"},{"front":"dog","back":"cachorro"}]}'
 ```
 
 ### Flashcard review (spaced repetition)
 
-Each student has their own schedule per card, created on the first rating (a card without one is
-**new**). "Today" is the school's day in its time zone.
+The review state lives on the card (a card never reviewed is **new**). "Today" is the school's day in its time zone.
 
 | Endpoint | Who | Notes |
 |---|---|---|
-| `GET /api/reviews/queue?deckId=` | student | due cards (oldest due first), then new cards in deck order: at most **20 new cards per deck per school day**; at most 200 cards per response. `dueCount`, `newCount`, `cards[]` (`cardId`, `deckId`, `deckTitle`, `front`, `back`, `isNew`, `dueAt`), `nextDueAt` when nothing is due. A deck not proposed to the student → 404 |
-| `POST /api/reviews` `{"cardId", "rating"}` | student | `rating`: `AGAIN`, `HARD`, `GOOD`, `EASY`; answers the new `dueAt`, `intervalDays`, `ease`, `repetitions`. Card of a deck not proposed to the student → 404 |
-| `GET /api/reviews/progress` | student | per deck: `newCards`, `learning`, `mature`, `dueToday`, `newToday` (new cards still allowed today), `reviewsLast7Days` |
-| `GET /api/decks/{id}/progress` | the deck's teacher | per student: `newCards`, `learning`, `mature`, `dueToday`, `reviewsLast7Days` |
+| `GET /api/reviews/queue` | student | due cards (oldest due first), then new cards in the order added: at most **20 new cards per school day**; at most 200 cards per response. `dueCount`, `newCount`, `cards[]` (`cardId`, `front`, `back`, `isNew`, `dueAt`), `nextDueAt` when nothing is due |
+| `POST /api/reviews` `{"cardId", "rating"}` | student | `rating`: `AGAIN`, `HARD`, `GOOD`, `EASY`; answers the new `dueAt`, `intervalDays`, `ease`, `repetitions`. Another student's card → 404 |
+| `GET /api/reviews/progress` | student | their counters, same fields as `/api/flashcards/progress` |
 
 Scheduling (SM-2 variant, `review/Scheduler.kt`). Cards start with ease 2.5, interval 0, 0 repetitions;
 ease never drops below 1.3; intervals multiply by the ease before the rating:
@@ -261,8 +267,7 @@ ease never drops below 1.3; intervals multiply by the ease before the rating:
 | `EASY` | +0.15 | 4 on the first success, else round(interval × ease × 1.3) | +1 |
 
 Intervals of a day or more are due at the **start of that day** in the school's time zone. Learning means
-interval under 21 days, mature 21 or more. Deleting a card deletes its review state and history; removing
-a deck from a student keeps them.
+interval under 21 days, mature 21 or more. Deleting a card deletes its review history.
 
 ```bash
 curl -s localhost:8080/api/reviews/queue -H 'X-Tenant: demo' -H "Authorization: Bearer $STUDENT"
@@ -270,7 +275,7 @@ curl -s localhost:8080/api/reviews/queue -H 'X-Tenant: demo' -H "Authorization: 
 curl -s localhost:8080/api/reviews -H 'X-Tenant: demo' -H "Authorization: Bearer $STUDENT" \
   -H 'Content-Type: application/json' -d '{"cardId":1,"rating":"GOOD"}'
 
-curl -s localhost:8080/api/decks/1/progress -H 'X-Tenant: demo' -H "Authorization: Bearer $TEACHER"
+curl -s localhost:8080/api/flashcards/progress -H 'X-Tenant: demo' -H "Authorization: Bearer $TEACHER"
 ```
 
 ### Creating a school (platform operator)

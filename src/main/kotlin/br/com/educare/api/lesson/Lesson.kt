@@ -40,6 +40,11 @@ class Lesson(
     @Column(length = 2000)
     var notes: String? = null,
 
+    /** The recurring series that created this lesson, if any. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "series_id", updatable = false)
+    val series: LessonSeries? = null,
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     val id: Long? = null,

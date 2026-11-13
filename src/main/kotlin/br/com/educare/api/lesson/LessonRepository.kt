@@ -35,4 +35,24 @@ interface LessonRepository : JpaRepository<Lesson, Long>, JpaSpecificationExecut
         """,
     )
     fun studentBusy(studentId: Long, startsAt: Instant, endsAt: Instant, excludeId: Long): Boolean
+
+    /** Scheduled lessons of a series starting at or after [from], in order. */
+    @Query(
+        """
+        select l from Lesson l
+        where l.series.id = :seriesId and l.status = br.com.educare.api.lesson.LessonStatus.SCHEDULED and l.startsAt >= :from
+        order by l.startsAt
+        """,
+    )
+    fun findScheduledInSeries(seriesId: Long, from: Instant): List<Lesson>
+}
+
+/** Scoped to the current school by Hibernate (see TenantOwnedEntity). */
+interface LessonSeriesRepository : JpaRepository<LessonSeries, Long> {
+
+    @EntityGraph(attributePaths = ["teacher", "student", "student.user"])
+    fun findByEndedAtIsNullOrderByCreatedAt(): List<LessonSeries>
+
+    /** Active series that do not yet have lessons up to [date]. */
+    fun findByEndedAtIsNullAndGeneratedUntilBefore(date: java.time.LocalDate): List<LessonSeries>
 }

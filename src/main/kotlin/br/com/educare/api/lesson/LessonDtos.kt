@@ -52,6 +52,8 @@ data class LessonResponse(
     val topic: String,
     val notes: String?,
     val status: LessonStatus,
+    /** Set when the lesson belongs to a recurring series. */
+    val seriesId: Long?,
     val createdAt: Instant,
     val updatedAt: Instant,
 )
@@ -68,6 +70,7 @@ fun Lesson.toResponse() = LessonResponse(
     topic = topic,
     notes = notes,
     status = status,
+    seriesId = series?.id,
     createdAt = createdAt,
     updatedAt = updatedAt,
 )
