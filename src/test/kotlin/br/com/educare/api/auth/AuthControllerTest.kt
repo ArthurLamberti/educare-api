@@ -3,10 +3,6 @@ package br.com.educare.api.auth
 import br.com.educare.api.support.IntegrationTest
 import br.com.educare.api.support.auth
 import br.com.educare.api.support.json
-import br.com.educare.api.tenant.TenantContext
-import br.com.educare.api.user.Role
-import br.com.educare.api.user.User
-import br.com.educare.api.user.UserRepository
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -17,14 +13,11 @@ import org.springframework.security.oauth2.jwt.JwtEncoder
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters
 import org.springframework.test.web.servlet.get
 import org.springframework.test.web.servlet.post
-import org.springframework.transaction.support.TransactionTemplate
 import java.time.Duration
 import java.time.Instant
 
 class AuthControllerTest : IntegrationTest() {
 
-    @Autowired lateinit var users: UserRepository
-    @Autowired lateinit var transactions: TransactionTemplate
     @Autowired lateinit var encoder: JwtEncoder
 
     var alphaId = 0L
@@ -121,13 +114,8 @@ class AuthControllerTest : IntegrationTest() {
 
     @Test
     fun `forbids roles that are not allowed`() {
-        TenantContext.runAs(alphaId) {
-            transactions.execute {
-                users.save(User(name = "Sam", email = "sam@alpha.com", passwordHash = "{noop}x", role = Role.STUDENT))
-            }
-        }
-        // Students are created by change 03; insert one with a known password hash directly.
-        jdbc.update("UPDATE users SET password_hash = (SELECT password_hash FROM users WHERE email = 'admin@alpha.com') WHERE email = 'sam@alpha.com'")
+        createTeacher("alpha", "t@alpha.com")
+        createStudent("alpha", tokenFor("alpha", "t@alpha.com"), "sam@alpha.com")
         val studentToken = tokenFor("alpha", "sam@alpha.com")
         mockMvc.get("/api/teachers") { auth("alpha", studentToken) }.andExpect {
             status { isForbidden() }

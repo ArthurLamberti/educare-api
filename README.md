@@ -61,6 +61,25 @@ curl -s localhost:8080/api/teachers -H 'X-Tenant: demo' -H "Authorization: Beare
 Other endpoints: `GET /api/tenant` (public: school name and time zone), `POST /api/auth/change-password`, `GET|PUT /api/teachers/{id}`,
 `POST /api/teachers/{id}/deactivate|activate`.
 
+### Students
+
+Students are user accounts (role `STUDENT`) owned by a teacher. Teachers create and see only their own
+students; admins see everyone (`?teacherId=` filters) and must pass `teacherId` when creating, and can
+reassign it on update. New students must change their initial password on first login.
+`DELETE /api/students/{id}` deactivates (the student can no longer log in, history is kept; listed
+again with `?includeInactive=true`); `POST /api/students/{id}/activate` restores access.
+
+```bash
+TEACHER=$(curl -s localhost:8080/api/auth/login -H 'X-Tenant: demo' -H 'Content-Type: application/json' \
+  -d '{"email":"ana@demo.com","password":"temp-pass-1"}' | jq -r .token)
+
+curl -s localhost:8080/api/students -H 'X-Tenant: demo' -H "Authorization: Bearer $TEACHER" \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Maria","email":"maria@demo.com","birthDate":"2012-03-04","initialPassword":"maria-temp-1"}'
+```
+
+Response fields: `id`, `name`, `email`, `birthDate`, `teacherId`, `teacherName`, `active`, `createdAt`.
+
 ### Creating a school (platform operator)
 
 ```bash

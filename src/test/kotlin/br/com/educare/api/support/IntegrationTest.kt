@@ -69,6 +69,15 @@ abstract class IntegrationTest {
         return jsonMapper.readTree(body).get("id")?.asLong() ?: error("Teacher creation failed: $body")
     }
 
+    /** Creates a student through the API as [teacherToken]'s user (a teacher) and returns its id. */
+    fun createStudent(slug: String, teacherToken: String, email: String, password: String = PASSWORD, name: String = "Student $email"): Long {
+        val body = mockMvc.post("/api/students") {
+            auth(slug, teacherToken)
+            json("""{"name":"$name","email":"$email","initialPassword":"$password"}""")
+        }.andReturn().response.contentAsString
+        return jsonMapper.readTree(body).get("id")?.asLong() ?: error("Student creation failed: $body")
+    }
+
     companion object {
         const val PASSWORD = "password123"
     }
