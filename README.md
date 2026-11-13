@@ -206,6 +206,38 @@ curl -s -X PUT localhost:8080/api/assignments/1/grade -H 'X-Tenant: demo' -H "Au
   -H 'Content-Type: application/json' -d '{"score":8.5,"feedback":"Good! Watch the irregular verbs.","version":0}'
 ```
 
+### Flashcard decks
+
+Teachers write **decks** of **cards** (`front`/`back`, up to 1000 characters each, at most 1000 cards per
+deck) and propose them to their students. `GET /api/decks` is role-aware: teachers get their own decks,
+students the decks proposed to them (archived ones included), admins all.
+
+| Endpoint | Who | Notes |
+|---|---|---|
+| `POST /api/decks`, `PUT /api/decks/{id}` | teacher | `{"title", "description?"}` |
+| `GET /api/decks`, `GET /api/decks/{id}` | all | newest first; `includeArchived=true` (teachers/admins); `cardCount`, `studentCount` (null for students) |
+| `POST /api/decks/{id}/archive`, `/unarchive` | teacher | archived decks are hidden by default and cannot be proposed (409) |
+| `GET /api/decks/{id}/cards` | all who see the deck | in deck order |
+| `POST /api/decks/{id}/cards` | teacher | `{"front", "back"}`, appended last; 1000 cards → 409 |
+| `PUT /api/cards/{id}`, `DELETE /api/cards/{id}` | teacher | edits keep the card id |
+| `PUT /api/decks/{id}/cards/order` | teacher | `{"cardIds": [...]}`: every card of the deck exactly once (otherwise 400, order unchanged) |
+| `GET /api/decks/{id}/students` | teacher | students who have the deck |
+| `POST /api/decks/{id}/students` | teacher | `{"studentIds": [...]}`: the teacher's active students (400, nothing added); students who already have it are skipped |
+| `DELETE /api/decks/{id}/students/{studentId}` | teacher | the student no longer sees the deck |
+
+```bash
+curl -s localhost:8080/api/decks -H 'X-Tenant: demo' -H "Authorization: Bearer $TEACHER" \
+  -H 'Content-Type: application/json' -d '{"title":"Animals","description":"Common animals"}'
+
+curl -s localhost:8080/api/decks/1/cards -H 'X-Tenant: demo' -H "Authorization: Bearer $TEACHER" \
+  -H 'Content-Type: application/json' -d '{"front":"cat","back":"gato"}'
+
+curl -s localhost:8080/api/decks/1/students -H 'X-Tenant: demo' -H "Authorization: Bearer $TEACHER" \
+  -H 'Content-Type: application/json' -d '{"studentIds":[1]}'
+
+curl -s localhost:8080/api/decks -H 'X-Tenant: demo' -H "Authorization: Bearer $STUDENT"
+```
+
 ### Creating a school (platform operator)
 
 ```bash
