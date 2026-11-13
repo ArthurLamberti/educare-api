@@ -12,7 +12,7 @@ import java.time.LocalDate
 @Entity
 @Table(name = "students")
 class Student(
-    @Column(nullable = false)
+    @Column(nullable = false, length = 150)
     var name: String,
 
     @Column(nullable = false, unique = true)

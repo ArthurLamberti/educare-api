@@ -1,0 +1,46 @@
+schema: spec-driven
+
+context: |
+  Educare is a multi-tenant tutoring platform. A tenant is a school; each school has
+  admins, teachers and students. Lessons are 1 teacher + 1 student.
+  This repo is the REST API (educare-api). The frontend lives in a separate repo
+  (educare-web, Next.js) that calls this API only from its server, never from the browser.
+  Tech stack: Kotlin 2.3, Spring Boot 4.1, Java 21, Gradle Kotlin DSL, Spring Data JPA,
+  Bean Validation, PostgreSQL. Tests use MockMvc + JUnit 5.
+  Conventions: everything in English (code, API, messages). Package-by-feature under
+  br.com.educare.api.<feature> (Entity, Repository, Service, Controller, Dtos).
+  Errors are RFC 9457 ProblemDetail; validation errors carry an `errors` map field -> message.
+  Lists are paginated Spring Data pages.
+  Changes are numbered in implementation order (01-, 02-, ...); the matching educare-web
+  change has the same number and name and depends on this one.
+
+# Project context (optional)
+# This is shown to AI when creating artifacts.
+# Add your tech stack, conventions, style guides, domain knowledge, etc.
+# Example:
+#   context: |
+#     Tech stack: TypeScript, React, Node.js
+#     We use conventional commits
+#     Domain: e-commerce platform
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always include a "Non-goals" section
+#     tasks:
+#       - Break tasks into chunks of max 2 hours
+
+# Per-operation guidance (optional)
+# Add advisory guidance for how apply and archive work should be conducted.
+# This is separate from artifact rules above.
+# Example:
+#   operations:
+#     apply:
+#       guidance:
+#         - Keep test summaries concise
+#     archive:
+#       guidance:
+#         - Summarize the archive outcome before finishing
