@@ -39,7 +39,7 @@ abstract class IntegrationTest {
 
     @BeforeEach
     fun resetState() {
-        jdbc.execute("TRUNCATE deck_students, cards, decks, submissions, assignments, tasks, reschedule_requests, lessons, students, users, tenants RESTART IDENTITY CASCADE")
+        jdbc.execute("TRUNCATE review_events, card_reviews, deck_students, cards, decks, submissions, assignments, tasks, reschedule_requests, lessons, students, users, tenants RESTART IDENTITY CASCADE")
         tenantDirectory.clear()
         userStatus.clear()
         clock.now = null

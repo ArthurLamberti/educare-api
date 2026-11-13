@@ -18,6 +18,9 @@ interface DeckRepository : JpaRepository<Deck, Long>, JpaSpecificationExecutor<D
 
 interface CardRepository : JpaRepository<Card, Long> {
 
+    @EntityGraph(attributePaths = ["deck"])
+    fun findWithDeckByIdIn(ids: Collection<Long>): List<Card>
+
     fun findByDeckIdOrderByPosition(deckId: Long): List<Card>
 
     fun countByDeckId(deckId: Long): Long
@@ -34,6 +37,9 @@ interface DeckStudentRepository : JpaRepository<DeckStudent, DeckStudentId> {
 
     @EntityGraph(attributePaths = ["student", "student.user"])
     fun findByDeckIdOrderByStudentUserName(deckId: Long): List<DeckStudent>
+
+    @EntityGraph(attributePaths = ["deck"])
+    fun findByStudentIdOrderByAssignedAt(studentId: Long): List<DeckStudent>
 
     fun existsByDeckIdAndStudentUserId(deckId: Long, userId: Long): Boolean
 

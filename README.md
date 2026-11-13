@@ -238,6 +238,41 @@ curl -s localhost:8080/api/decks/1/students -H 'X-Tenant: demo' -H "Authorizatio
 curl -s localhost:8080/api/decks -H 'X-Tenant: demo' -H "Authorization: Bearer $STUDENT"
 ```
 
+### Flashcard review (spaced repetition)
+
+Each student has their own schedule per card, created on the first rating (a card without one is
+**new**). "Today" is the school's day in its time zone.
+
+| Endpoint | Who | Notes |
+|---|---|---|
+| `GET /api/reviews/queue?deckId=` | student | due cards (oldest due first), then new cards in deck order: at most **20 new cards per deck per school day**; at most 200 cards per response. `dueCount`, `newCount`, `cards[]` (`cardId`, `deckId`, `deckTitle`, `front`, `back`, `isNew`, `dueAt`), `nextDueAt` when nothing is due. A deck not proposed to the student → 404 |
+| `POST /api/reviews` `{"cardId", "rating"}` | student | `rating`: `AGAIN`, `HARD`, `GOOD`, `EASY`; answers the new `dueAt`, `intervalDays`, `ease`, `repetitions`. Card of a deck not proposed to the student → 404 |
+| `GET /api/reviews/progress` | student | per deck: `newCards`, `learning`, `mature`, `dueToday`, `newToday` (new cards still allowed today), `reviewsLast7Days` |
+| `GET /api/decks/{id}/progress` | the deck's teacher | per student: `newCards`, `learning`, `mature`, `dueToday`, `reviewsLast7Days` |
+
+Scheduling (SM-2 variant, `review/Scheduler.kt`). Cards start with ease 2.5, interval 0, 0 repetitions;
+ease never drops below 1.3; intervals multiply by the ease before the rating:
+
+| Rating | Ease | Interval (days) | Repetitions |
+|---|---|---|---|
+| `AGAIN` | −0.20 | 0, due again in 10 minutes | 0 |
+| `HARD` | −0.15 | 1 if repetitions was 0, else max(1, round(interval × 1.2)) | +1 |
+| `GOOD` | = | 1 on the first success, 6 on the second, else round(interval × ease) | +1 |
+| `EASY` | +0.15 | 4 on the first success, else round(interval × ease × 1.3) | +1 |
+
+Intervals of a day or more are due at the **start of that day** in the school's time zone. Learning means
+interval under 21 days, mature 21 or more. Deleting a card deletes its review state and history; removing
+a deck from a student keeps them.
+
+```bash
+curl -s localhost:8080/api/reviews/queue -H 'X-Tenant: demo' -H "Authorization: Bearer $STUDENT"
+
+curl -s localhost:8080/api/reviews -H 'X-Tenant: demo' -H "Authorization: Bearer $STUDENT" \
+  -H 'Content-Type: application/json' -d '{"cardId":1,"rating":"GOOD"}'
+
+curl -s localhost:8080/api/decks/1/progress -H 'X-Tenant: demo' -H "Authorization: Bearer $TEACHER"
+```
+
 ### Creating a school (platform operator)
 
 ```bash
