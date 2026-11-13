@@ -1,0 +1,43 @@
+spring:
+  application:
+    name: educare-api
+  profiles:
+    default: dev
+  jpa:
+    open-in-view: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+---
+spring:
+  config:
+    activate:
+      on-profile: dev
+  datasource:
+    url: jdbc:h2:mem:educare;DB_CLOSE_DELAY=-1
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+  h2:
+    console:
+      enabled: true
+
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/educare}
+    username: ${DB_USERNAME:educare}
+    password: ${DB_PASSWORD:educare}
+  jpa:
+    hibernate:
+      ddl-auto: validate
