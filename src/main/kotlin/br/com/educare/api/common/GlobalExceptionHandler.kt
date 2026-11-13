@@ -26,6 +26,7 @@ class GlobalExceptionHandler {
             "ex_lessons_teacher_overlap" in message -> "The teacher already has a lesson at this time"
             "ex_lessons_student_overlap" in message -> "The student already has a lesson at this time"
             "ux_reschedule_requests_pending" in message -> "This lesson already has a pending change request"
+            "ux_assignments_open" in message -> "This task is already assigned to the student"
             else -> "The data conflicts with existing records"
         }
         return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, detail)

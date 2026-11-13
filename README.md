@@ -145,6 +145,39 @@ Response fields: `id`, `lessonId`, `lessonTopic`, `lessonStatus`, `teacherId`, `
 `studentName`, `lessonStartsAt` (current), `durationMinutes`, `originalStartsAt` (when requested),
 `proposedStartsAt`, `reason`, `status`, `decisionNote`, `decidedByName`, `decidedAt`, `createdAt`.
 
+### Tasks and assignments
+
+Teachers keep a library of **tasks** (`title` up to 200, `instructions` in Markdown up to 10000 characters) and
+give them to their students as **assignments** with an optional due date. Tasks are private to their teacher
+(others get 404); students and admins cannot use `/api/tasks` (403).
+
+| Endpoint | Who | Notes |
+|---|---|---|
+| `POST /api/tasks`, `PUT /api/tasks/{id}` | teacher | `{"title", "instructions"}` |
+| `GET /api/tasks` | teacher | newest first; `q` (title search), `includeArchived=true` |
+| `GET /api/tasks/{id}` | teacher | |
+| `POST /api/tasks/{id}/archive`, `/unarchive` | teacher | archived tasks are hidden by default and cannot be assigned (409) |
+| `DELETE /api/tasks/{id}` | teacher | only tasks without assignments (otherwise 409: archive it) |
+| `POST /api/tasks/{id}/assignments` | teacher | `{"studentIds": [..], "dueAt?"}`: one `ASSIGNED` assignment per student, all or nothing; students must be the teacher's active students (400), `dueAt` in the future (400); a student who still has the task `ASSIGNED` → 409 |
+| `DELETE /api/assignments/{id}` | the task's teacher | only while `ASSIGNED` (409 once submitted) |
+| `GET /api/assignments` | all | students: theirs; teachers: of their tasks; admins: all. Filters `status` (repeatable), `studentId`, `taskId`; soonest due first, no due date last |
+| `GET /api/assignments/{id}` | all | 404 when the caller cannot see it |
+
+```bash
+curl -s localhost:8080/api/tasks -H 'X-Tenant: demo' -H "Authorization: Bearer $TEACHER" \
+  -H 'Content-Type: application/json' -d '{"title":"Irregular verbs","instructions":"Write **10** sentences."}'
+
+curl -s localhost:8080/api/tasks/1/assignments -H 'X-Tenant: demo' -H "Authorization: Bearer $TEACHER" \
+  -H 'Content-Type: application/json' -d '{"studentIds":[1],"dueAt":"2030-01-20T21:00:00Z"}'
+
+curl -s "localhost:8080/api/assignments?status=ASSIGNED" -H 'X-Tenant: demo' -H "Authorization: Bearer $STUDENT"
+```
+
+Task fields: `id`, `title`, `instructions`, `archived`, `assignmentCount`, `createdAt`, `updatedAt`.
+Assignment fields: `id`, `taskId`, `taskTitle`, `instructions`, `teacherId`, `teacherName`, `studentId`,
+`studentName`, `dueAt`, `assignedAt`, `status` (`ASSIGNED`, `SUBMITTED`, `GRADED`), `overdue` (due date
+passed and still `ASSIGNED`).
+
 ### Creating a school (platform operator)
 
 ```bash
