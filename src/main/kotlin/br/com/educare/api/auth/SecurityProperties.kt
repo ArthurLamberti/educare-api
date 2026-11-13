@@ -10,6 +10,11 @@ data class SecurityProperties(
     /** Platform operator key for `/api/platform/` (EDUCARE_PLATFORM_KEY). */
     val platformKey: String,
     val tokenTtl: Duration = Duration.ofHours(12),
+    /**
+     * Addresses allowed to tell the client's IP in `X-Forwarded-For` (the educare-web server).
+     * Requests from anywhere else are identified by their socket address.
+     */
+    val trustedProxies: List<String> = listOf("127.0.0.1", "0:0:0:0:0:0:0:1", "::1"),
 ) {
     init {
         require(jwtSecret.toByteArray().size >= 32) { "educare.security.jwt-secret (EDUCARE_JWT_SECRET) must have at least 32 bytes" }

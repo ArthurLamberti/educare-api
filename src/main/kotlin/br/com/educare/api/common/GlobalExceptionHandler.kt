@@ -2,8 +2,10 @@ package br.com.educare.api.common
 
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.dao.OptimisticLockingFailureException
+import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.ProblemDetail
+import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.MethodArgumentNotValidException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
@@ -29,6 +31,7 @@ class GlobalExceptionHandler {
             "ux_reschedule_requests_pending" in message -> "This lesson already has a pending change request"
             "ux_submissions_assignment" in message -> "This assignment already has a submission"
             "ux_assignments_open" in message -> "This task is already assigned to the student"
+            "uk_tenants_slug" in message -> "This address is already taken"
             else -> "The data conflicts with existing records"
         }
         return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, detail)
@@ -42,6 +45,22 @@ class GlobalExceptionHandler {
     @ExceptionHandler(BusinessRuleException::class)
     fun handleBusinessRule(ex: BusinessRuleException): ProblemDetail =
         ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_CONTENT, ex.message ?: "Not allowed by the school rules")
+
+    @ExceptionHandler(BadRequestException::class)
+    fun handleBadRequest(ex: BadRequestException): ProblemDetail =
+        ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.message ?: "Bad request")
+
+    @ExceptionHandler(EmailNotConfirmedException::class)
+    fun handleEmailNotConfirmed(ex: EmailNotConfirmedException): ProblemDetail =
+        ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, ex.message ?: "Email not confirmed").apply {
+            setProperty("code", "EMAIL_NOT_CONFIRMED")
+        }
+
+    @ExceptionHandler(TooManyRequestsException::class)
+    fun handleTooManyRequests(ex: TooManyRequestsException): ResponseEntity<ProblemDetail> =
+        ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+            .header(HttpHeaders.RETRY_AFTER, ex.retryAfterSeconds.toString())
+            .body(ProblemDetail.forStatusAndDetail(HttpStatus.TOO_MANY_REQUESTS, ex.message ?: "Too many requests"))
 
     @ExceptionHandler(UnauthorizedException::class)
     fun handleUnauthorized(ex: UnauthorizedException): ProblemDetail =

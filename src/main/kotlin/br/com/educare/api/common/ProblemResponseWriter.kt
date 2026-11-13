@@ -11,7 +11,13 @@ import tools.jackson.databind.json.JsonMapper
 @Component
 class ProblemResponseWriter(private val jsonMapper: JsonMapper) {
 
-    fun write(request: HttpServletRequest, response: HttpServletResponse, status: HttpStatus, detail: String) {
+    fun write(
+        request: HttpServletRequest,
+        response: HttpServletResponse,
+        status: HttpStatus,
+        detail: String,
+        extra: Map<String, Any> = emptyMap(),
+    ) {
         response.status = status.value()
         response.contentType = MediaType.APPLICATION_PROBLEM_JSON_VALUE
         val body = mapOf(
@@ -20,7 +26,7 @@ class ProblemResponseWriter(private val jsonMapper: JsonMapper) {
             "status" to status.value(),
             "detail" to detail,
             "instance" to request.requestURI,
-        )
+        ) + extra
         jsonMapper.writeValue(response.outputStream, body)
     }
 }

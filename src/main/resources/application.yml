@@ -21,6 +21,17 @@ educare:
     jwt-secret: ${EDUCARE_JWT_SECRET:}
     platform-key: ${EDUCARE_PLATFORM_KEY:}
     token-ttl: 12h
+  platform:
+    # System admin (operator panel), created at startup if missing; sets the password via "Esqueci a senha".
+    admin-email: ${EDUCARE_ADMIN_EMAIL:arthurlamberti001@gmail.com}
+    admin-name: ${EDUCARE_ADMIN_NAME:Administrador}
+  web:
+    root-domain: ${EDUCARE_WEB_ROOT_DOMAIN:localhost:3000}
+    scheme: ${EDUCARE_WEB_SCHEME:http}
+  mail:
+    from: ${EDUCARE_MAIL_FROM:Educare <nao-responda@educare.localhost>}
+    # Notified when a new private space waits for activation (empty = no notice).
+    operator: ${EDUCARE_MAIL_OPERATOR:}
 
 ---
 spring:
@@ -31,6 +42,8 @@ educare:
   security:
     jwt-secret: ${EDUCARE_JWT_SECRET:dev-only-jwt-secret-not-for-production-0123456789}
     platform-key: ${EDUCARE_PLATFORM_KEY:dev-platform-key}
+  mail:
+    operator: ${EDUCARE_MAIL_OPERATOR:operador@educare.localhost}
 
 ---
 spring:
@@ -43,6 +56,9 @@ spring:
     password: ${DB_PASSWORD:educare}
   jpa:
     show-sql: true
+  mail:
+    host: ${MAIL_HOST:localhost}
+    port: ${MAIL_PORT:1026}
 
 ---
 spring:

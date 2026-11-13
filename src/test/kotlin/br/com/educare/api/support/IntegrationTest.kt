@@ -4,6 +4,7 @@ import br.com.educare.api.TestcontainersConfiguration
 import br.com.educare.api.platform.AdminRequest
 import br.com.educare.api.platform.PlatformService
 import br.com.educare.api.platform.ProvisionTenantRequest
+import br.com.educare.api.signup.RateLimiter
 import br.com.educare.api.tenant.TenantDirectory
 import br.com.educare.api.user.UserStatusCache
 import org.junit.jupiter.api.BeforeEach
@@ -23,7 +24,7 @@ import tools.jackson.databind.json.JsonMapper
 
 /** Base for API tests: real PostgreSQL, Spring Security, clean database and helpers per test. */
 @SpringBootTest
-@Import(TestcontainersConfiguration::class, ClockTestConfiguration::class)
+@Import(TestcontainersConfiguration::class, ClockTestConfiguration::class, MailTestConfiguration::class)
 @ActiveProfiles("test")
 abstract class IntegrationTest {
 
@@ -34,15 +35,19 @@ abstract class IntegrationTest {
     @Autowired lateinit var tenantDirectory: TenantDirectory
     @Autowired lateinit var userStatus: UserStatusCache
     @Autowired lateinit var clock: MutableClock
+    @Autowired lateinit var mailer: RecordingMailer
+    @Autowired lateinit var rateLimiter: RateLimiter
 
     lateinit var mockMvc: MockMvc
 
     @BeforeEach
     fun resetState() {
-        jdbc.execute("TRUNCATE review_events, cards, submissions, assignments, tasks, reschedule_requests, lessons, lesson_series, students, users, tenants RESTART IDENTITY CASCADE")
+        jdbc.execute("TRUNCATE password_resets, platform_admins, email_confirmations, review_events, cards, submissions, assignments, tasks, reschedule_requests, lessons, lesson_series, students, users, tenants RESTART IDENTITY CASCADE")
         tenantDirectory.clear()
         userStatus.clear()
         clock.now = null
+        mailer.sent.clear()
+        rateLimiter.clear()
         mockMvc = MockMvcBuilders.webAppContextSetup(context).apply<org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder>(springSecurity()).build()
     }
 
@@ -78,6 +83,13 @@ abstract class IntegrationTest {
             json("""{"name":"$name","email":"$email","initialPassword":"$password"}""")
         }.andReturn().response.contentAsString
         return jsonMapper.readTree(body).get("id")?.asLong() ?: error("Student creation failed: $body")
+    }
+
+    /** Activates a space as the platform operator (`POST /api/platform/tenants/{id}/activate`). */
+    fun activate(slug: String) {
+        val id = jdbc.queryForObject("SELECT id FROM tenants WHERE slug = ?", Long::class.java, slug)
+        mockMvc.post("/api/platform/tenants/$id/activate") { header("X-Platform-Key", "dev-platform-key") }
+            .andExpect { status { isOk() } }
     }
 
     companion object {

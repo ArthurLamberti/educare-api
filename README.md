@@ -13,7 +13,7 @@ REST API for Educare (Kotlin, Spring Boot 4, PostgreSQL). The web frontend lives
 ./gradlew bootRun
 ```
 
-`bootRun` starts the PostgreSQL service from `compose.yaml` automatically (Spring Boot Docker Compose
+`bootRun` starts the PostgreSQL and Mailpit services from `compose.yaml` automatically (Spring Boot Docker Compose
 support), stops it again when the API shuts down, and applies the database migrations. If the
 container is already running it is reused and left running. The API listens on http://localhost:8080.
 
@@ -26,11 +26,13 @@ docker compose down -v    # stop it and delete all data
 ```
 
 Connection settings can be overridden with `DB_URL`, `DB_USERNAME` and `DB_PASSWORD`.
+
+Emails sent in development (sign-up confirmation) are caught by Mailpit: open http://localhost:8026.
 Profiles: `dev` (default) and `prod` (`SPRING_PROFILES_ACTIVE=prod`).
 
 ## Schools, login and roles
 
-Educare is multi-tenant: each school (tenant) has a slug that matches its web address
+Educare is multi-tenant: each school or private teacher's space (tenant) has a slug that matches its web address
 (`<slug>.educare.com`). Every `/api/**` request must name its school and, except login, carry an
 access token:
 
@@ -288,7 +290,96 @@ curl -s localhost:8080/api/platform/tenants -H 'X-Platform-Key: dev-platform-key
   }'
 ```
 
-The first admin must change the password on first login.
+The first admin must change the password on first login. Reserved addresses (`www`, `api`, `admin`,
+… see `tenant/Slugs.kt`) are refused with 400.
+
+### Private teachers (sign-up)
+
+A tenant has a `kind`: `SCHOOL` (provisioned by the operator, with admins and teachers) or `INDIVIDUAL`
+(a private teacher's own space, created by a public sign-up). In an individual space the teacher is
+an ordinary `TEACHER` and there is no admin; everything a teacher does works the same.
+
+The public endpoints need no `X-Tenant` and no token:
+
+| Endpoint | Notes |
+|---|---|
+| `GET /api/public/slug-availability?slug=` | `available`, and `reason` when not: `INVALID`, `RESERVED`, `TAKEN` |
+| `POST /api/public/signups` | `name`, `email`, `password` (8+), `spaceName`, `slug`, `timeZone` → 202 `{slug}`; creates the space and an unconfirmed teacher and emails a confirmation link. Taken address → 409, reserved → 400 `errors.slug` |
+| `POST /api/public/signups/confirm` `{"token"}` | 200 `{slug}`; the link is single use and valid 48 hours, otherwise 400 |
+| `POST /api/public/signups/resend` `{"email", "slug"}` | always 202; sends a new link (older ones stop working) only if an unconfirmed account matches |
+
+- Signing up again for a still-unconfirmed address with the same password corrects that sign-up (name,
+  email, space name, time zone) and sends a new link, so a mistyped email does not hold the address.
+- Until the email is confirmed, login with the right password answers 403 with `code: EMAIL_NOT_CONFIRMED`.
+- Spaces never confirmed are deleted after 7 days (hourly job), and the address becomes free again.
+- Rate limits (in memory, per instance), 429 with `Retry-After` when exceeded: sign-up 5/hour per client
+  IP and 3/day per email, address checks 60/minute per IP, confirmations 20/hour per IP, resends 10/hour
+  per IP and 3/hour per account. The client IP comes from `X-Forwarded-For` only when the request comes
+  from `educare.security.trusted-proxies` (default: loopback, where educare-web runs in development).
+- The confirmation link points at `<scheme>://<slug>.<EDUCARE_WEB_ROOT_DOMAIN>/confirm?token=…`.
+
+```bash
+curl -s localhost:8080/api/public/signups -H 'Content-Type: application/json' -d '{
+    "name": "Ana Souza", "email": "ana@example.com", "password": "password123",
+    "spaceName": "Ana – Inglês", "slug": "ana-ingles", "timeZone": "America/Sao_Paulo"
+  }'
+# open the link from the email in Mailpit (http://localhost:8026), or post its token:
+curl -s localhost:8080/api/public/signups/confirm -H 'Content-Type: application/json' -d '{"token":"..."}'
+```
+
+### Space activation
+
+Every tenant has a `status`: `PENDING`, `ACTIVE` or `SUSPENDED`. Schools start `ACTIVE`; private spaces
+start `PENDING` and are only usable once activated, today by the operator, later by a confirmed payment
+(`TenantActivationService.activate(id, ActivationSource.PAYMENT)` from the gateway's webhook).
+
+- In a space that is not `ACTIVE`, users can log in, call `/api/auth/**` and `GET /api/tenant`; anything
+  else answers 403 with `code: ACCOUNT_INACTIVE` and `status`. The status is checked on every request.
+- When the teacher confirms the email, the operator gets an email (`EDUCARE_MAIL_OPERATOR`; in dev
+  `operador@educare.localhost`, visible in Mailpit). On activation the teacher gets "Seu espaço na
+  Educare está liberado".
+- Activation is refused (422) while the teacher has not confirmed the email.
+- Wrong platform keys: 10 per client IP in 15 minutes, then 429.
+
+```bash
+K='X-Platform-Key: dev-platform-key'
+curl -s -H "$K" 'localhost:8080/api/platform/tenants?status=PENDING'   # with owner name/email/emailConfirmed
+curl -s -H "$K" -X POST localhost:8080/api/platform/tenants/{id}/activate
+curl -s -H "$K" -X POST localhost:8080/api/platform/tenants/{id}/suspend
+```
+
+The web has a panel for this at `http://localhost:3000/admin`, used by platform admins.
+
+### Platform admin
+
+At startup the API creates the system admin `EDUCARE_ADMIN_EMAIL` (default `arthurlamberti001@gmail.com`)
+if it does not exist, with a random password. To set it, use "Esqueci a senha (ou primeiro acesso)" on
+`localhost:3000/admin/login`; in development the email lands in Mailpit (http://localhost:8026).
+
+| Endpoint | Notes |
+|---|---|
+| `POST /api/platform/auth/login` `{"email","password"}` | `{token, expiresAt, admin}`; 10 attempts per IP in 15 minutes |
+| `GET /api/platform/auth/me` | the admin of the token |
+| `POST /api/platform/auth/forgot-password` `{"email"}` | always 202 |
+| `POST /api/platform/auth/reset-password` `{"token","newPassword"}` | 204, or 400 for a bad link |
+
+`/api/platform/**` accepts `Authorization: Bearer <admin token>` or `X-Platform-Key` (scripts). Admin
+tokens are rejected on school endpoints, and school tokens on platform endpoints.
+
+### Forgot password
+
+`POST /api/auth/forgot-password` `{"email"}` (with `X-Tenant`) always answers 202 and emails a link to
+`<slug>.<root>/reset-password?token=…` when an active, confirmed account exists. `POST
+/api/auth/reset-password` `{"token","newPassword"}` → 204; it also clears a temporary password. Links
+are single use, valid 1 hour, replaced by newer ones, and only work in their own school. At most 3
+emails per account per hour; asks 10/hour and resets 20/hour per IP. Sessions opened before a reset
+stay valid until they expire.
+
+### Settings
+
+`PUT /api/tenant` `{"name", "timeZone"}` changes the school's or space's name and time zone (the slug
+never changes). Allowed to a school's admins and to the teacher of an individual space; others get 403.
+`GET /api/tenant` and `GET /api/auth/me` include `kind` and `status`.
 
 ### Configuration
 
@@ -296,6 +387,11 @@ The first admin must change the password on first login.
 |---|---|
 | `EDUCARE_JWT_SECRET` | HMAC secret for tokens, at least 32 bytes. Required outside `dev`/`test`. |
 | `EDUCARE_PLATFORM_KEY` | Key for `/api/platform/**`. Required outside `dev`/`test` (dev default: `dev-platform-key`). |
+| `EDUCARE_WEB_ROOT_DOMAIN`, `EDUCARE_WEB_SCHEME` | Where educare-web runs, for links in emails (default `localhost:3000`, `http`) |
+| `EDUCARE_MAIL_FROM` | Sender of emails |
+| `EDUCARE_ADMIN_EMAIL`, `EDUCARE_ADMIN_NAME` | System admin created at startup if missing (default `arthurlamberti001@gmail.com`, "Administrador") |
+| `EDUCARE_MAIL_OPERATOR` | Who is told that a new space waits for activation (empty: nobody; dev: `operador@educare.localhost`) |
+| `MAIL_HOST`, `MAIL_PORT` | SMTP in `dev` (default Mailpit, `localhost:1026`); in `prod` set `SPRING_MAIL_HOST`, `SPRING_MAIL_PORT`, `SPRING_MAIL_USERNAME`, `SPRING_MAIL_PASSWORD`. Without an SMTP host, emails are only logged |
 
 ## Testing
 

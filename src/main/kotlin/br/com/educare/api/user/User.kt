@@ -35,6 +35,9 @@ class User(
     @Column(nullable = false)
     var active: Boolean = true,
 
+    /** Null only for a self sign-up that has not confirmed the email yet; such users cannot log in. */
+    var emailConfirmedAt: Instant? = Instant.now(),
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     val id: Long? = null,

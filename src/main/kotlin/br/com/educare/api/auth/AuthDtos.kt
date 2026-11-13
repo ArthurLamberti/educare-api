@@ -1,6 +1,8 @@
 package br.com.educare.api.auth
 
 import br.com.educare.api.tenant.TenantInfo
+import br.com.educare.api.tenant.TenantKind
+import br.com.educare.api.tenant.TenantStatus
 import br.com.educare.api.user.Role
 import br.com.educare.api.user.User
 import jakarta.validation.constraints.NotBlank
@@ -12,7 +14,9 @@ data class LoginRequest(
     @field:NotBlank val password: String,
 )
 
-data class TenantSummary(val slug: String, val name: String, val timeZone: String)
+data class TenantSummary(val slug: String, val name: String, val timeZone: String, val kind: TenantKind, val status: TenantStatus)
+
+fun TenantInfo.toSummary() = TenantSummary(slug, name, timeZone, kind, status)
 
 data class UserResponse(
     val id: Long,
@@ -36,5 +40,5 @@ fun User.toResponse(tenant: TenantInfo) = UserResponse(
     email = email,
     role = role,
     mustChangePassword = mustChangePassword,
-    tenant = TenantSummary(tenant.slug, tenant.name, tenant.timeZone),
+    tenant = tenant.toSummary(),
 )

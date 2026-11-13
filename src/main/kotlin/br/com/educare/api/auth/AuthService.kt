@@ -1,5 +1,6 @@
 package br.com.educare.api.auth
 
+import br.com.educare.api.common.EmailNotConfirmedException
 import br.com.educare.api.common.FieldValidationException
 import br.com.educare.api.common.NotFoundException
 import br.com.educare.api.common.UnauthorizedException
@@ -33,6 +34,8 @@ class AuthService(
         if (!passwordEncoder.matches(request.password, user.passwordHash) || !user.active) {
             throw invalidCredentials()
         }
+        // Only after the password matched, so this does not reveal which emails signed up.
+        if (user.emailConfirmedAt == null) throw EmailNotConfirmedException()
         val issued = tokens.issue(user)
         return LoginResponse(issued.token, issued.expiresAt, user.toResponse(currentTenant()))
     }

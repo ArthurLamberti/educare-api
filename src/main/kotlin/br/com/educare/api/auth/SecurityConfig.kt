@@ -1,6 +1,8 @@
 package br.com.educare.api.auth
 
 import br.com.educare.api.common.ProblemResponseWriter
+import br.com.educare.api.signup.ClientIp
+import br.com.educare.api.signup.RateLimiter
 import br.com.educare.api.tenant.TenantDirectory
 import br.com.educare.api.tenant.TenantFilter
 import com.nimbusds.jose.jwk.source.ImmutableSecret
@@ -9,6 +11,9 @@ import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.http.HttpMethod
 import org.springframework.http.HttpStatus
+import org.springframework.security.authorization.AuthorizationDecision
+import org.springframework.security.authorization.AuthorizationManager
+import org.springframework.security.web.access.intercept.RequestAuthorizationContext
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.config.http.SessionCreationPolicy
@@ -37,6 +42,8 @@ class SecurityConfig {
         properties: SecurityProperties,
         problemWriter: ProblemResponseWriter,
         jwtConverter: TenantAwareJwtConverter,
+        limiter: RateLimiter,
+        clientIp: ClientIp,
     ): SecurityFilterChain {
         val entryPoint = AuthenticationEntryPoint { request, response, _ ->
             problemWriter.write(request, response, HttpStatus.UNAUTHORIZED, "Authentication required")
@@ -44,13 +51,27 @@ class SecurityConfig {
         val accessDenied = AccessDeniedHandler { request, response, _ ->
             problemWriter.write(request, response, HttpStatus.FORBIDDEN, "You are not allowed to do this")
         }
+        // The right platform key (PlatformKeyFilter), or a platform admin's token.
+        val platformAccess = AuthorizationManager<RequestAuthorizationContext> { authentication, context ->
+            AuthorizationDecision(
+                context.request.getAttribute(PlatformKeyFilter.KEY_ACCEPTED) == true ||
+                    authentication.get()?.authorities.orEmpty().any { it.authority == "ROLE_${TokenService.PLATFORM_ADMIN_ROLE}" },
+            )
+        }
         http
             .csrf { it.disable() }
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
             .authorizeHttpRequests {
-                it.requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
+                it.requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/forgot-password", "/api/auth/reset-password").permitAll()
                     .requestMatchers(HttpMethod.GET, "/api/tenant").permitAll()
-                    .requestMatchers("/api/platform/**").permitAll()
+                    .requestMatchers(
+                        HttpMethod.POST,
+                        "/api/platform/auth/login",
+                        "/api/platform/auth/forgot-password",
+                        "/api/platform/auth/reset-password",
+                    ).permitAll()
+                    .requestMatchers("/api/platform/**").access(platformAccess)
+                    .requestMatchers("/api/public/**").permitAll()
                     .requestMatchers("/actuator/health", "/actuator/info", "/error").permitAll()
                     .anyRequest().authenticated()
             }
@@ -61,7 +82,7 @@ class SecurityConfig {
             }
             .exceptionHandling { it.authenticationEntryPoint(entryPoint).accessDeniedHandler(accessDenied) }
             .addFilterBefore(TenantFilter(tenantDirectory, problemWriter), SecurityContextHolderFilter::class.java)
-            .addFilterBefore(PlatformKeyFilter(properties, problemWriter), SecurityContextHolderFilter::class.java)
+            .addFilterBefore(PlatformKeyFilter(properties, problemWriter, limiter, clientIp), SecurityContextHolderFilter::class.java)
         return http.build()
     }
 

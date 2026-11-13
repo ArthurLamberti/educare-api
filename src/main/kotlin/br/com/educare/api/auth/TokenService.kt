@@ -1,5 +1,6 @@
 package br.com.educare.api.auth
 
+import br.com.educare.api.platform.PlatformAdmin
 import br.com.educare.api.user.User
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm
 import org.springframework.security.oauth2.jwt.JwsHeader
@@ -27,8 +28,24 @@ class TokenService(private val encoder: JwtEncoder, private val properties: Secu
         return IssuedToken(encoder.encode(JwtEncoderParameters.from(header, claims)).tokenValue, expiresAt)
     }
 
+    /** For a platform admin: no tenant, `platform: true`. Only accepted under `/api/platform/`. */
+    fun issuePlatform(admin: PlatformAdmin, now: Instant = Instant.now()): IssuedToken {
+        val expiresAt = now.plus(properties.tokenTtl)
+        val claims = JwtClaimsSet.builder()
+            .subject(requireNotNull(admin.id).toString())
+            .claim(PLATFORM_CLAIM, true)
+            .claim(ROLE_CLAIM, PLATFORM_ADMIN_ROLE)
+            .issuedAt(now)
+            .expiresAt(expiresAt)
+            .build()
+        val header = JwsHeader.with(MacAlgorithm.HS256).build()
+        return IssuedToken(encoder.encode(JwtEncoderParameters.from(header, claims)).tokenValue, expiresAt)
+    }
+
     companion object {
         const val TENANT_CLAIM = "tid"
         const val ROLE_CLAIM = "role"
+        const val PLATFORM_CLAIM = "platform"
+        const val PLATFORM_ADMIN_ROLE = "PLATFORM_ADMIN"
     }
 }
