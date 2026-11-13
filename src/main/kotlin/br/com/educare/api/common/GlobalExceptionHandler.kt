@@ -1,6 +1,7 @@
 package br.com.educare.api.common
 
 import org.springframework.dao.DataIntegrityViolationException
+import org.springframework.dao.OptimisticLockingFailureException
 import org.springframework.http.HttpStatus
 import org.springframework.http.ProblemDetail
 import org.springframework.web.bind.MethodArgumentNotValidException
@@ -26,11 +27,17 @@ class GlobalExceptionHandler {
             "ex_lessons_teacher_overlap" in message -> "The teacher already has a lesson at this time"
             "ex_lessons_student_overlap" in message -> "The student already has a lesson at this time"
             "ux_reschedule_requests_pending" in message -> "This lesson already has a pending change request"
+            "ux_submissions_assignment" in message -> "This assignment already has a submission"
             "ux_assignments_open" in message -> "This task is already assigned to the student"
             else -> "The data conflicts with existing records"
         }
         return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, detail)
     }
+
+    /** Another request changed the same record first (optimistic locking). */
+    @ExceptionHandler(OptimisticLockingFailureException::class)
+    fun handleOptimisticLock(): ProblemDetail =
+        ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, "This record was changed by someone else; reload and try again")
 
     @ExceptionHandler(BusinessRuleException::class)
     fun handleBusinessRule(ex: BusinessRuleException): ProblemDetail =

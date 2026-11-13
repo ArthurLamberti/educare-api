@@ -178,6 +178,34 @@ Assignment fields: `id`, `taskId`, `taskTitle`, `instructions`, `teacherId`, `te
 `studentName`, `dueAt`, `assignedAt`, `status` (`ASSIGNED`, `SUBMITTED`, `GRADED`), `overdue` (due date
 passed and still `ASSIGNED`).
 
+### Submissions and grading
+
+The assigned student answers with text (Markdown, up to 20000 characters); the task's teacher grades
+with a `score` from 0 to 10 (at most one decimal) and `feedback`.
+
+```
+ASSIGNED ──submit──▶ SUBMITTED ──grade──▶ GRADED
+                     ◀─┘ edit answer      ◀─┘ revise grade
+```
+
+| Endpoint | Who | Notes |
+|---|---|---|
+| `PUT /api/assignments/{id}/submission` `{"answer"}` | the assigned student | first submit snapshots the task instructions and records `submittedAt`; edits keep it; after the due date `late: true` (accepted); `GRADED` → 409 |
+| `PUT /api/assignments/{id}/grade` `{"score", "feedback", "version?"}` | the task's teacher | `ASSIGNED` → 409; invalid score → 400 `errors.score`; send the submission `version` you reviewed: if the student changed the answer since, 409 |
+| `GET /api/assignments?status=SUBMITTED` | teacher | grading queue, oldest submission first |
+
+Both answer with the assignment, which now also carries `submission` (`answer`, `instructionsSnapshot`,
+`submittedAt`, `updatedAt`, `late`, `version`) once submitted and `grade` (`score`, `feedback`, `gradedAt`,
+`gradedByName`) once graded.
+
+```bash
+curl -s -X PUT localhost:8080/api/assignments/1/submission -H 'X-Tenant: demo' -H "Authorization: Bearer $STUDENT" \
+  -H 'Content-Type: application/json' -d '{"answer":"I went to the park. I saw a friend."}'
+
+curl -s -X PUT localhost:8080/api/assignments/1/grade -H 'X-Tenant: demo' -H "Authorization: Bearer $TEACHER" \
+  -H 'Content-Type: application/json' -d '{"score":8.5,"feedback":"Good! Watch the irregular verbs.","version":0}'
+```
+
 ### Creating a school (platform operator)
 
 ```bash

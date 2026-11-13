@@ -5,16 +5,21 @@ import br.com.educare.api.common.ConflictException
 import br.com.educare.api.common.FieldValidationException
 import br.com.educare.api.common.NotFoundException
 import br.com.educare.api.student.StudentRepository
+import br.com.educare.api.submission.Submission
+import br.com.educare.api.submission.SubmissionRepository
 import br.com.educare.api.task.TaskService
 import br.com.educare.api.user.Role
 import jakarta.persistence.criteria.JoinType
+import org.hibernate.query.criteria.JpaRoot
 import org.springframework.data.domain.Page
+import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.domain.Specification
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Clock
+import java.time.Instant
 
 data class AssignmentFilter(
     val statuses: List<AssignmentStatus> = emptyList(),
@@ -30,18 +35,41 @@ data class AssignmentFilter(
 @Transactional(readOnly = true)
 class AssignmentService(
     private val assignments: AssignmentRepository,
+    private val submissions: SubmissionRepository,
     private val students: StudentRepository,
     private val taskService: TaskService,
     private val currentUser: CurrentUser,
     private val clock: Clock,
 ) {
 
+    /** The grading queue (`status=SUBMITTED` only) is always oldest submission first. */
     fun list(filter: AssignmentFilter, pageable: Pageable): Page<AssignmentResponse> {
         val now = clock.instant()
-        return assignments.findAll(visibleTo().and(filter.toSpec()), pageable).map { it.toResponse(now) }
+        val spec = visibleTo().and(filter.toSpec())
+        val page = if (filter.statuses == listOf(AssignmentStatus.SUBMITTED)) {
+            // Unsorted page: the order comes from the specification (joined submission time).
+            assignments.findAll(spec.and(oldestSubmissionFirst()), PageRequest.of(pageable.pageNumber, pageable.pageSize))
+        } else {
+            assignments.findAll(spec, pageable)
+        }
+        val byAssignment = page.content.mapNotNull { it.id }.takeIf { it.isNotEmpty() }
+            ?.let { ids -> submissions.findByAssignmentIdIn(ids).associateBy { it.assignment.id } }
+            .orEmpty()
+        return page.map { it.toResponse(now, byAssignment[it.id]) }
     }
 
-    fun get(id: Long): AssignmentResponse = findVisible(id).toResponse(clock.instant())
+    fun toResponse(assignment: Assignment): AssignmentResponse =
+        assignment.toResponse(clock.instant(), submissions.findByAssignmentId(requireNotNull(assignment.id)))
+
+    private fun oldestSubmissionFirst() = Specification<Assignment> { root, query, cb ->
+        val submission = (root as JpaRoot<Assignment>).join(Submission::class.java)
+        submission.on(cb.equal(submission.get<Assignment>("assignment"), root))
+        // Spring Data drops this order from the count query.
+        query?.orderBy(cb.asc(submission.get<Instant>("submittedAt")), cb.asc(root.get<Long>("id")))
+        cb.conjunction()
+    }
+
+    fun get(id: Long): AssignmentResponse = toResponse(findVisible(id))
 
     /** One assignment per student, all or nothing. */
     @Transactional
@@ -63,7 +91,7 @@ class AssignmentService(
 
         val byId = found.associateBy { it.id }
         val created = ids.map { Assignment(task = task, student = byId.getValue(it), dueAt = request.dueAt, assignedAt = now) }
-        return assignments.saveAllAndFlush(created).map { it.toResponse(now) }
+        return assignments.saveAllAndFlush(created).map { it.toResponse(now, null) }
     }
 
     /** Only work that has not been submitted can be unassigned. */
@@ -78,9 +106,11 @@ class AssignmentService(
         assignments.delete(assignment)
     }
 
-    private fun findVisible(id: Long): Assignment =
+    /** Visible to the caller (404 otherwise); used by submissions and grading. */
+    fun findVisible(id: Long): Assignment = findVisibleOrNull(id) ?: throw NotFoundException("Assignment $id not found")
+
+    private fun findVisibleOrNull(id: Long): Assignment? =
         assignments.findOne(visibleTo().and { root, _, cb -> cb.equal(root.get<Long>("id"), id) }).orElse(null)
-            ?: throw NotFoundException("Assignment $id not found")
 
     /** Role scope: teachers see assignments of their tasks, students theirs, admins all of the school. */
     private fun visibleTo(): Specification<Assignment> {

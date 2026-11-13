@@ -47,6 +47,18 @@ class Assignment(
     var status: AssignmentStatus = AssignmentStatus.ASSIGNED
         protected set
 
+    /** ASSIGNED → SUBMITTED (first answer, see Submission). */
+    fun submitted() {
+        check(status == AssignmentStatus.ASSIGNED) { "Only ASSIGNED work can be submitted for the first time" }
+        status = AssignmentStatus.SUBMITTED
+    }
+
+    /** SUBMITTED or GRADED → GRADED. */
+    fun graded() {
+        check(status != AssignmentStatus.ASSIGNED) { "Nothing to grade" }
+        status = AssignmentStatus.GRADED
+    }
+
     /** Due date passed and nothing submitted yet. */
     fun isOverdue(now: Instant): Boolean = status == AssignmentStatus.ASSIGNED && dueAt?.isBefore(now) == true
 }
