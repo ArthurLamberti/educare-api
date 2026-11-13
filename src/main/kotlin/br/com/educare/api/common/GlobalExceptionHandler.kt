@@ -25,10 +25,15 @@ class GlobalExceptionHandler {
         val detail = when {
             "ex_lessons_teacher_overlap" in message -> "The teacher already has a lesson at this time"
             "ex_lessons_student_overlap" in message -> "The student already has a lesson at this time"
+            "ux_reschedule_requests_pending" in message -> "This lesson already has a pending change request"
             else -> "The data conflicts with existing records"
         }
         return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, detail)
     }
+
+    @ExceptionHandler(BusinessRuleException::class)
+    fun handleBusinessRule(ex: BusinessRuleException): ProblemDetail =
+        ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_CONTENT, ex.message ?: "Not allowed by the school rules")
 
     @ExceptionHandler(UnauthorizedException::class)
     fun handleUnauthorized(ex: UnauthorizedException): ProblemDetail =

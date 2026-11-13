@@ -109,6 +109,42 @@ curl -s "localhost:8080/api/lessons?from=$(date -u +%FT%TZ)&status=SCHEDULED" \
 Response fields: `id`, `teacherId`, `teacherName`, `studentId`, `studentName`, `startsAt`, `endsAt`,
 `durationMinutes`, `topic`, `notes`, `status`, `createdAt`, `updatedAt`.
 
+### Lesson change requests
+
+A student may ask to move one of their scheduled lessons, **at least 48 hours before the lesson's current
+start** (otherwise 422). The lesson keeps its duration; the proposed time must be in the future and free.
+Only one request per lesson can be pending (409). The lesson's teacher approves (the lesson moves, with the
+usual overlap checks; a conflict answers 409 and the request stays pending) or rejects with an optional note.
+
+```
+PENDING ──approve──▶ APPROVED      (teacher; lesson moved)
+        ──reject───▶ REJECTED      (teacher; optional note)
+        ──withdraw─▶ WITHDRAWN     (student)
+        ──────────▶ CANCELED       (lesson canceled or moved directly by the teacher)
+```
+
+| Endpoint | Who |
+|---|---|
+| `POST /api/lessons/{id}/reschedule-requests` `{"proposedStartsAt", "reason?"}` | the lesson's student |
+| `GET /api/reschedule-requests?status=PENDING` | students: theirs; teachers: on their lessons; admins: all (newest first) |
+| `POST /api/reschedule-requests/{id}/withdraw` | the requesting student |
+| `POST /api/reschedule-requests/{id}/approve` | the lesson's teacher |
+| `POST /api/reschedule-requests/{id}/reject` `{"note?"}` | the lesson's teacher |
+
+```bash
+STUDENT=$(curl -s localhost:8080/api/auth/login -H 'X-Tenant: demo' -H 'Content-Type: application/json' \
+  -d '{"email":"maria@demo.com","password":"maria-temp-1"}' | jq -r .token)
+
+curl -s localhost:8080/api/lessons/1/reschedule-requests -H 'X-Tenant: demo' -H "Authorization: Bearer $STUDENT" \
+  -H 'Content-Type: application/json' -d '{"proposedStartsAt":"2030-01-16T13:00:00Z","reason":"Doctor appointment"}'
+
+curl -s -X POST localhost:8080/api/reschedule-requests/1/approve -H 'X-Tenant: demo' -H "Authorization: Bearer $TEACHER"
+```
+
+Response fields: `id`, `lessonId`, `lessonTopic`, `lessonStatus`, `teacherId`, `teacherName`, `studentId`,
+`studentName`, `lessonStartsAt` (current), `durationMinutes`, `originalStartsAt` (when requested),
+`proposedStartsAt`, `reason`, `status`, `decisionNote`, `decidedByName`, `decidedAt`, `createdAt`.
+
 ### Creating a school (platform operator)
 
 ```bash

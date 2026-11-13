@@ -9,12 +9,14 @@ import br.com.educare.api.student.StudentRepository
 import br.com.educare.api.user.Role
 import br.com.educare.api.user.UserRepository
 import jakarta.persistence.criteria.JoinType
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.domain.Specification
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 
@@ -37,6 +39,8 @@ class LessonService(
     private val students: StudentRepository,
     private val users: UserRepository,
     private val currentUser: CurrentUser,
+    private val events: ApplicationEventPublisher,
+    private val clock: Clock,
 ) {
 
     fun list(filter: LessonFilter, pageable: Pageable): Page<LessonResponse> =
@@ -65,7 +69,12 @@ class LessonService(
     @Transactional
     fun update(id: Long, request: UpdateLessonRequest): LessonResponse {
         val lesson = findOwnScheduled(id)
-        reschedule(lesson, requireNotNull(request.startsAt), requireNotNull(request.durationMinutes))
+        val startsAt = requireNotNull(request.startsAt)
+        val duration = requireNotNull(request.durationMinutes)
+        if (startsAt != lesson.startsAt || duration != lesson.durationMinutes) {
+            reschedule(lesson, startsAt, duration)
+            events.publishEvent(LessonTimeChanged(requireNotNull(lesson.id)))
+        }
         lesson.topic = request.topic.trim()
         lesson.notes = request.notes?.trim()?.ifEmpty { null }
         lesson.touch()
@@ -76,18 +85,23 @@ class LessonService(
     fun cancel(id: Long): LessonResponse {
         val lesson = findOwnScheduled(id)
         lesson.cancel()
+        events.publishEvent(LessonCanceled(requireNotNull(lesson.id)))
         return lesson.toResponse()
     }
 
     /**
      * The single path that changes a lesson's time: validates the slot and checks overlaps.
-     * Reused by reschedule requests (change 05).
+     * Also used when a reschedule request is approved (it publishes no event).
      */
     fun reschedule(lesson: Lesson, startsAt: Instant, durationMinutes: Int) {
-        if (!startsAt.isAfter(Instant.now())) throw FieldValidationException("startsAt", "must be a future date")
-        checkFree(requireNotNull(lesson.teacher.id), requireNotNull(lesson.student.id), startsAt, durationMinutes, lesson.id)
+        if (!startsAt.isAfter(clock.instant())) throw FieldValidationException("startsAt", "must be a future date")
+        ensureFree(lesson, startsAt, durationMinutes)
         lesson.changeTime(startsAt, durationMinutes)
     }
+
+    /** 409 if the lesson's teacher or student has another scheduled lesson in that range. */
+    fun ensureFree(lesson: Lesson, startsAt: Instant, durationMinutes: Int) =
+        checkFree(requireNotNull(lesson.teacher.id), requireNotNull(lesson.student.id), startsAt, durationMinutes, lesson.id)
 
     private fun checkFree(teacherId: Long, studentId: Long, startsAt: Instant, durationMinutes: Int, excludeId: Long?) {
         val endsAt = startsAt.plus(Duration.ofMinutes(durationMinutes.toLong()))

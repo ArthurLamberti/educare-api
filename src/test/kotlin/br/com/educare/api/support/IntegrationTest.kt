@@ -23,7 +23,7 @@ import tools.jackson.databind.json.JsonMapper
 
 /** Base for API tests: real PostgreSQL, Spring Security, clean database and helpers per test. */
 @SpringBootTest
-@Import(TestcontainersConfiguration::class)
+@Import(TestcontainersConfiguration::class, ClockTestConfiguration::class)
 @ActiveProfiles("test")
 abstract class IntegrationTest {
 
@@ -33,14 +33,16 @@ abstract class IntegrationTest {
     @Autowired lateinit var platform: PlatformService
     @Autowired lateinit var tenantDirectory: TenantDirectory
     @Autowired lateinit var userStatus: UserStatusCache
+    @Autowired lateinit var clock: MutableClock
 
     lateinit var mockMvc: MockMvc
 
     @BeforeEach
     fun resetState() {
-        jdbc.execute("TRUNCATE lessons, students, users, tenants RESTART IDENTITY CASCADE")
+        jdbc.execute("TRUNCATE reschedule_requests, lessons, students, users, tenants RESTART IDENTITY CASCADE")
         tenantDirectory.clear()
         userStatus.clear()
+        clock.now = null
         mockMvc = MockMvcBuilders.webAppContextSetup(context).apply<org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder>(springSecurity()).build()
     }
 
