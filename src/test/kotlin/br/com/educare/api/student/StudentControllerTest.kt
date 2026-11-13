@@ -1,4 +1,4 @@
-package br.com.educare.api.aluno
+package br.com.educare.api.student
 
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -14,13 +14,13 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
 
 @SpringBootTest
-class AlunoControllerTest {
+class StudentControllerTest {
 
     @Autowired
     lateinit var context: WebApplicationContext
 
     @Autowired
-    lateinit var repository: AlunoRepository
+    lateinit var repository: StudentRepository
 
     lateinit var mockMvc: MockMvc
 
@@ -30,55 +30,55 @@ class AlunoControllerTest {
         mockMvc = MockMvcBuilders.webAppContextSetup(context).build()
     }
 
-    private fun criar(nome: String, email: String) = mockMvc.post("/api/alunos") {
+    private fun create(name: String, email: String) = mockMvc.post("/api/students") {
         contentType = MediaType.APPLICATION_JSON
-        content = """{"nome":"$nome","email":"$email","dataNascimento":"2010-05-20"}"""
+        content = """{"name":"$name","email":"$email","birthDate":"2010-05-20"}"""
     }
 
     @Test
-    fun `cria, busca, atualiza e remove um aluno`() {
-        criar("Maria", "maria@educare.com").andExpect {
+    fun `creates, gets, updates and deletes a student`() {
+        create("Maria", "maria@educare.com").andExpect {
             status { isCreated() }
             header { exists("Location") }
-            jsonPath("$.nome") { value("Maria") }
+            jsonPath("$.name") { value("Maria") }
         }
 
         val id = repository.findAll().single().id
 
-        mockMvc.get("/api/alunos/$id").andExpect {
+        mockMvc.get("/api/students/$id").andExpect {
             status { isOk() }
             jsonPath("$.email") { value("maria@educare.com") }
         }
 
-        mockMvc.put("/api/alunos/$id") {
+        mockMvc.put("/api/students/$id") {
             contentType = MediaType.APPLICATION_JSON
-            content = """{"nome":"Maria Silva","email":"maria@educare.com"}"""
+            content = """{"name":"Maria Silva","email":"maria@educare.com"}"""
         }.andExpect {
             status { isOk() }
-            jsonPath("$.nome") { value("Maria Silva") }
+            jsonPath("$.name") { value("Maria Silva") }
         }
 
-        mockMvc.get("/api/alunos").andExpect {
+        mockMvc.get("/api/students").andExpect {
             status { isOk() }
             jsonPath("$.content.length()") { value(1) }
         }
 
-        mockMvc.delete("/api/alunos/$id").andExpect { status { isNoContent() } }
-        mockMvc.get("/api/alunos/$id").andExpect { status { isNotFound() } }
+        mockMvc.delete("/api/students/$id").andExpect { status { isNoContent() } }
+        mockMvc.get("/api/students/$id").andExpect { status { isNotFound() } }
     }
 
     @Test
-    fun `retorna 400 para dados invalidos`() {
-        criar("", "nao-e-email").andExpect {
+    fun `returns 400 for invalid data`() {
+        create("", "not-an-email").andExpect {
             status { isBadRequest() }
-            jsonPath("$.erros.nome") { exists() }
-            jsonPath("$.erros.email") { exists() }
+            jsonPath("$.errors.name") { exists() }
+            jsonPath("$.errors.email") { exists() }
         }
     }
 
     @Test
-    fun `retorna 409 para email duplicado`() {
-        criar("Joao", "joao@educare.com").andExpect { status { isCreated() } }
-        criar("Joao 2", "joao@educare.com").andExpect { status { isConflict() } }
+    fun `returns 409 for duplicate email`() {
+        create("Joao", "joao@educare.com").andExpect { status { isCreated() } }
+        create("Joao 2", "joao@educare.com").andExpect { status { isConflict() } }
     }
 }

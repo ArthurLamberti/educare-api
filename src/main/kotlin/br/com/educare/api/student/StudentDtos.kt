@@ -1,4 +1,4 @@
-package br.com.educare.api.aluno
+package br.com.educare.api.student
 
 import jakarta.validation.constraints.Email
 import jakarta.validation.constraints.NotBlank
@@ -7,29 +7,29 @@ import jakarta.validation.constraints.Size
 import java.time.Instant
 import java.time.LocalDate
 
-data class AlunoRequest(
+data class StudentRequest(
     @field:NotBlank @field:Size(max = 150)
-    val nome: String,
+    val name: String,
 
     @field:NotBlank @field:Email @field:Size(max = 255)
     val email: String,
 
     @field:Past
-    val dataNascimento: LocalDate? = null,
+    val birthDate: LocalDate? = null,
 )
 
-data class AlunoResponse(
+data class StudentResponse(
     val id: Long,
-    val nome: String,
+    val name: String,
     val email: String,
-    val dataNascimento: LocalDate?,
-    val criadoEm: Instant,
+    val birthDate: LocalDate?,
+    val createdAt: Instant,
 )
 
-fun Aluno.toResponse() = AlunoResponse(
+fun Student.toResponse() = StudentResponse(
     id = requireNotNull(id),
-    nome = nome,
+    name = name,
     email = email,
-    dataNascimento = dataNascimento,
-    criadoEm = criadoEm,
+    birthDate = birthDate,
+    createdAt = createdAt,
 )

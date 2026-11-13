@@ -1,4 +1,4 @@
-package br.com.educare.api.aluno
+package br.com.educare.api.student
 
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
@@ -10,20 +10,20 @@ import java.time.Instant
 import java.time.LocalDate
 
 @Entity
-@Table(name = "alunos")
-class Aluno(
+@Table(name = "students")
+class Student(
     @Column(nullable = false)
-    var nome: String,
+    var name: String,
 
     @Column(nullable = false, unique = true)
     var email: String,
 
-    var dataNascimento: LocalDate? = null,
+    var birthDate: LocalDate? = null,
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     val id: Long? = null,
 
     @Column(nullable = false, updatable = false)
-    val criadoEm: Instant = Instant.now(),
+    val createdAt: Instant = Instant.now(),
 )

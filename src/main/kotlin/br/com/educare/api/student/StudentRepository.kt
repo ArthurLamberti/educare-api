@@ -1,8 +1,8 @@
-package br.com.educare.api.aluno
+package br.com.educare.api.student
 
 import org.springframework.data.jpa.repository.JpaRepository
 
-interface AlunoRepository : JpaRepository<Aluno, Long> {
+interface StudentRepository : JpaRepository<Student, Long> {
     fun existsByEmail(email: String): Boolean
     fun existsByEmailAndIdNot(email: String, id: Long): Boolean
 }

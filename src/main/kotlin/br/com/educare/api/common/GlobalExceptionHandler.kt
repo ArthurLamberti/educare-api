@@ -11,18 +11,18 @@ class GlobalExceptionHandler {
 
     @ExceptionHandler(NotFoundException::class)
     fun handleNotFound(ex: NotFoundException): ProblemDetail =
-        ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.message ?: "Recurso não encontrado")
+        ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.message ?: "Resource not found")
 
     @ExceptionHandler(ConflictException::class)
     fun handleConflict(ex: ConflictException): ProblemDetail =
-        ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.message ?: "Conflito")
+        ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.message ?: "Conflict")
 
     @ExceptionHandler(MethodArgumentNotValidException::class)
     fun handleValidation(ex: MethodArgumentNotValidException): ProblemDetail =
-        ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Dados inválidos").apply {
+        ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Invalid data").apply {
             setProperty(
-                "erros",
-                ex.bindingResult.fieldErrors.associate { it.field to (it.defaultMessage ?: "inválido") },
+                "errors",
+                ex.bindingResult.fieldErrors.associate { it.field to (it.defaultMessage ?: "invalid") },
             )
         }
 }
