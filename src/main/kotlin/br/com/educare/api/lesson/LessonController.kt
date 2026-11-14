@@ -48,6 +48,11 @@ class LessonController(private val service: LessonService) {
     fun update(@PathVariable id: Long, @Valid @RequestBody request: UpdateLessonRequest): LessonResponse =
         service.update(id, request)
 
+    @PutMapping("/{id}/annotations")
+    @PreAuthorize("hasRole('TEACHER')")
+    fun annotate(@PathVariable id: Long, @Valid @RequestBody request: LessonAnnotationsRequest): LessonResponse =
+        service.annotate(id, request)
+
     @PostMapping("/{id}/cancel")
     @PreAuthorize("hasRole('TEACHER')")
     fun cancel(@PathVariable id: Long): LessonResponse = service.cancel(id)

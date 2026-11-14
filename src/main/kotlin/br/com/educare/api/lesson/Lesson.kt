@@ -40,6 +40,10 @@ class Lesson(
     @Column(length = 2000)
     var notes: String? = null,
 
+    /** Room link; set for online lessons. */
+    @Column(length = 500)
+    var meetingUrl: String? = null,
+
     /** The recurring series that created this lesson, if any. */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "series_id", updatable = false)
@@ -70,6 +74,19 @@ class Lesson(
     @Column(nullable = false, length = 20)
     var status: LessonStatus = LessonStatus.SCHEDULED
         protected set
+
+    /** The teacher's free-text notes about the lesson (any time, also after it), visible to the student. */
+    @Column(length = 10000)
+    var annotations: String? = null
+        protected set
+
+    var annotationsUpdatedAt: Instant? = null
+        protected set
+
+    fun annotate(text: String?, at: Instant) {
+        annotations = text
+        annotationsUpdatedAt = at
+    }
 
     @Column(nullable = false)
     var updatedAt: Instant = createdAt

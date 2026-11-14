@@ -89,15 +89,19 @@ clients convert to and from the school's `timeZone` (from `GET /api/tenant` or `
 
 | Endpoint | Who | Notes |
 |---|---|---|
-| `POST /api/lessons` | teacher | `studentId` (own active student), `startsAt` (future), `durationMinutes` (15-240), `topic`, `notes?` |
-| `PUT /api/lessons/{id}` | lesson's teacher | `startsAt`, `durationMinutes`, `topic`, `notes?`; the student never changes |
+| `POST /api/lessons` | teacher | `studentId` (own active student), `startsAt` (future), `durationMinutes` (15-240), `topic`, `notes?`, `meetingUrl?` |
+| `PUT /api/lessons/{id}` | lesson's teacher | `startsAt`, `durationMinutes`, `topic`, `notes?`, `meetingUrl?`; the student never changes |
+| `PUT /api/lessons/{id}/annotations` | lesson's teacher | `{"text"}` (up to 10000, empty clears): notes about the lesson, any time and status; the student sees them |
 | `POST /api/lessons/{id}/cancel` | lesson's teacher | status `CANCELED`; the record is kept and the slot is freed |
 | `GET /api/lessons` | all | teachers see theirs, students theirs, admins all; filters `from`, `to` (`from <= startsAt < to`), `status`, `studentId`, `teacherId` (admin); ordered by `startsAt` (`sort=startsAt,desc` to reverse) |
 | `GET /api/lessons/{id}` | all | 404 when the caller cannot see it |
 
 A teacher or student cannot have two overlapping `SCHEDULED` lessons (409); back-to-back lessons are fine.
 The database enforces this too (exclusion constraints), so concurrent requests cannot double-book.
-Canceled lessons cannot be edited (409).
+Canceled lessons cannot be edited (409), but their notes can.
+
+**Online lessons** have a `meetingUrl` (the room link, `http`/`https` only, up to 500); without it a
+lesson is in person. A weekly series accepts `meetingUrl` too and copies it to its lessons.
 
 ```bash
 curl -s localhost:8080/api/lessons -H 'X-Tenant: demo' -H "Authorization: Bearer $TEACHER" \
@@ -109,7 +113,7 @@ curl -s "localhost:8080/api/lessons?from=$(date -u +%FT%TZ)&status=SCHEDULED" \
 ```
 
 Response fields: `id`, `teacherId`, `teacherName`, `studentId`, `studentName`, `startsAt`, `endsAt`,
-`durationMinutes`, `topic`, `notes`, `status`, `seriesId` (null unless created by a series), `createdAt`, `updatedAt`.
+`durationMinutes`, `topic`, `notes`, `meetingUrl`, `annotations`, `annotationsUpdatedAt`, `status`, `seriesId` (null unless created by a series), `createdAt`, `updatedAt`.
 
 ### Weekly lessons (series)
 

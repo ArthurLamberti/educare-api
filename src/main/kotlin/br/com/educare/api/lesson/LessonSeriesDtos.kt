@@ -5,6 +5,7 @@ import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotEmpty
 import jakarta.validation.constraints.NotNull
+import jakarta.validation.constraints.Pattern
 import jakarta.validation.constraints.Size
 import java.time.DayOfWeek
 import java.time.Instant
@@ -33,6 +34,10 @@ data class CreateLessonSeriesRequest(
 
     @field:Size(max = 2000)
     val notes: String? = null,
+
+    /** Room link of an online lesson (http or https); empty or absent for an in-person lesson. */
+    @field:Size(max = 500) @field:Pattern(regexp = MEETING_URL_PATTERN, message = "must be an http or https link")
+    val meetingUrl: String? = null,
 )
 
 /** Ends the series from [from] (school date, default today): its scheduled lessons from then on are canceled. */
@@ -49,6 +54,7 @@ data class LessonSeriesResponse(
     val durationMinutes: Int,
     val topic: String,
     val notes: String?,
+    val meetingUrl: String?,
     val startsOn: LocalDate,
     val generatedUntil: LocalDate,
     val endedAt: Instant?,
@@ -71,6 +77,7 @@ fun LessonSeries.toResponse(nextLessonAt: Instant?) = LessonSeriesResponse(
     durationMinutes = durationMinutes,
     topic = topic,
     notes = notes,
+    meetingUrl = meetingUrl,
     startsOn = startsOn,
     generatedUntil = generatedUntil,
     endedAt = endedAt,

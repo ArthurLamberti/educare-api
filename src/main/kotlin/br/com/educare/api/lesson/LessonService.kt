@@ -62,6 +62,7 @@ class LessonService(
             durationMinutes = duration,
             topic = request.topic.trim(),
             notes = request.notes?.trim()?.ifEmpty { null },
+            meetingUrl = normalizeMeetingUrl(request.meetingUrl),
         )
         return lessons.saveAndFlush(lesson).toResponse()
     }
@@ -77,7 +78,20 @@ class LessonService(
         }
         lesson.topic = request.topic.trim()
         lesson.notes = request.notes?.trim()?.ifEmpty { null }
+        lesson.meetingUrl = normalizeMeetingUrl(request.meetingUrl)
         lesson.touch()
+        return lessons.saveAndFlush(lesson).toResponse()
+    }
+
+    /**
+     * The teacher's notes about one of their lessons, at any time (before, during or after it, and
+     * also when it was canceled). Empty text clears them.
+     */
+    @Transactional
+    fun annotate(id: Long, request: LessonAnnotationsRequest): LessonResponse {
+        val lesson = lessons.findByIdOrNull(id)?.takeIf { it.teacher.id == currentUser.id }
+            ?: throw NotFoundException("Lesson $id not found")
+        lesson.annotate(request.text?.trim()?.ifEmpty { null }, clock.instant())
         return lessons.saveAndFlush(lesson).toResponse()
     }
 

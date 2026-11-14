@@ -52,6 +52,10 @@ class LessonSeries(
     @Column(length = 2000, updatable = false)
     val notes: String?,
 
+    /** Room link copied to every lesson of an online series. */
+    @Column(length = 500, updatable = false)
+    val meetingUrl: String? = null,
+
     @Column(nullable = false, updatable = false)
     val startsOn: LocalDate,
 

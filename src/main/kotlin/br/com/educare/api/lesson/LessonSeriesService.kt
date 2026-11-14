@@ -66,6 +66,7 @@ class LessonSeriesService(
                 durationMinutes = requireNotNull(request.durationMinutes),
                 topic = request.topic.trim(),
                 notes = request.notes?.trim()?.ifEmpty { null },
+                meetingUrl = normalizeMeetingUrl(request.meetingUrl),
                 startsOn = startsOn,
                 createdAt = now,
             ),
@@ -150,6 +151,7 @@ class LessonSeriesService(
         durationMinutes = s.durationMinutes,
         topic = s.topic,
         notes = s.notes,
+        meetingUrl = s.meetingUrl,
         series = s,
         createdAt = clock.instant(),
     )

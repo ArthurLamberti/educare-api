@@ -225,4 +225,86 @@ class LessonControllerTest : IntegrationTest() {
         mockMvc.get("/api/lessons/$id") { auth("beta", tokenFor("beta")) }.andExpect { status { isNotFound() } }
         mockMvc.get("/api/lessons") { auth("beta", tokenFor("beta")) }.andExpect { jsonPath("$.content", hasSize<Any>(0)) }
     }
+
+    @Test
+    fun `an online lesson keeps its room link, which must be http or https`() {
+        mockMvc.post("/api/lessons") {
+            auth("alpha", ana)
+            json("""{"studentId":$mariaId,"startsAt":"${at(10.0)}","durationMinutes":60,"topic":"Grammar","meetingUrl":"javascript:alert(1)"}""")
+        }.andExpect {
+            status { isBadRequest() }
+            jsonPath("$.errors.meetingUrl") { exists() }
+        }
+        val body = mockMvc.post("/api/lessons") {
+            auth("alpha", ana)
+            json("""{"studentId":$mariaId,"startsAt":"${at(10.0)}","durationMinutes":60,"topic":"Grammar","meetingUrl":" https://meet.example.com/abc "}""")
+        }.andExpect {
+            status { isCreated() }
+            jsonPath("$.meetingUrl") { value("https://meet.example.com/abc") }
+        }.andReturn().response.contentAsString
+        val id = jsonMapper.readTree(body).get("id").asLong()
+        mockMvc.get("/api/lessons/$id") { auth("alpha", maria) }.andExpect { jsonPath("$.meetingUrl") { value("https://meet.example.com/abc") } }
+
+        // Editing without a link makes it in-person.
+        mockMvc.put("/api/lessons/$id") {
+            auth("alpha", ana)
+            json("""{"startsAt":"${at(10.0)}","durationMinutes":60,"topic":"Grammar","meetingUrl":""}""")
+        }.andExpect { jsonPath("$.meetingUrl") { value(null) } }
+    }
+
+    @Test
+    fun `the teacher writes notes about a lesson, also after it, and the student reads them`() {
+        val id = createId(ana, mariaId, at(10.0))
+        mockMvc.put("/api/lessons/$id/annotations") {
+            auth("alpha", ana)
+            json("""{"text":"  Revisamos o past simple.\nPróxima aula: verbos irregulares.  "}""")
+        }.andExpect {
+            status { isOk() }
+            jsonPath("$.annotations") { value("Revisamos o past simple.\nPróxima aula: verbos irregulares.") }
+            jsonPath("$.annotationsUpdatedAt") { exists() }
+        }
+        mockMvc.get("/api/lessons/$id") { auth("alpha", maria) }.andExpect {
+            jsonPath("$.annotations") { value("Revisamos o past simple.\nPróxima aula: verbos irregulares.") }
+        }
+
+        // After the lesson (and after it was canceled) the teacher can still write.
+        clock.now = at(12.0)
+        mockMvc.post("/api/lessons/$id/cancel") { auth("alpha", ana) }
+        mockMvc.put("/api/lessons/$id/annotations") {
+            auth("alpha", ana)
+            json("""{"text":""}""")
+        }.andExpect {
+            status { isOk() }
+            jsonPath("$.annotations") { value(null) }
+        }
+
+        // Only the lesson's teacher.
+        listOf(bob, maria, admin).forEach { token ->
+            mockMvc.put("/api/lessons/$id/annotations") {
+                auth("alpha", token)
+                json("""{"text":"x"}""")
+            }.andExpect { status { is4xxClientError() } }
+        }
+        mockMvc.put("/api/lessons/$id/annotations") {
+            auth("alpha", ana)
+            json("""{"text":"${"a".repeat(10001)}"}""")
+        }.andExpect { status { isBadRequest() } }
+    }
+
+    @Test
+    fun `a weekly series copies its room link to every lesson`() {
+        val startsOn = day.atZone(java.time.ZoneId.of("America/Sao_Paulo")).toLocalDate()
+        mockMvc.post("/api/lesson-series") {
+            auth("alpha", ana)
+            json(
+                """{"studentId":$mariaId,"weekdays":["${startsOn.dayOfWeek}"],"startsOn":"$startsOn","startTime":"15:00",
+                   "durationMinutes":60,"topic":"Conversation","meetingUrl":"https://zoom.example.com/j/1"}""",
+            )
+        }.andExpect {
+            status { isCreated() }
+            jsonPath("$.series.meetingUrl") { value("https://zoom.example.com/j/1") }
+        }
+        val lessonsUrls = jdbc.queryForList("SELECT DISTINCT meeting_url FROM lessons", String::class.java)
+        kotlin.test.assertEquals(listOf("https://zoom.example.com/j/1"), lessonsUrls)
+    }
 }
