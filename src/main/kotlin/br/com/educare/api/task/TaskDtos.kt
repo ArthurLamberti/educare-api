@@ -15,6 +15,9 @@ data class TaskRequest(
 
     /** Optional; an active level (see GET /api/levels). */
     val levelId: Long? = null,
+
+    /** Optional; one of the teacher's categories (see /api/task-categories). */
+    val categoryId: Long? = null,
 )
 
 data class TaskResponse(
@@ -22,6 +25,7 @@ data class TaskResponse(
     val title: String,
     val instructions: String,
     val level: LevelResponse?,
+    val category: TaskCategoryResponse?,
     val archived: Boolean,
     /** Assignments of this task in any status; a task with assignments cannot be deleted. */
     val assignmentCount: Long,
@@ -34,6 +38,7 @@ fun Task.toResponse(assignmentCount: Long) = TaskResponse(
     title = title,
     instructions = instructions,
     level = level?.toResponse(),
+    category = category?.toResponse(),
     archived = archived,
     assignmentCount = assignmentCount,
     createdAt = createdAt,

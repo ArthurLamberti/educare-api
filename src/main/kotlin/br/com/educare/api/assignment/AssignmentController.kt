@@ -35,7 +35,9 @@ class AssignmentController(private val service: AssignmentService) {
         @RequestParam(required = false) studentId: Long?,
         @RequestParam(required = false) taskId: Long?,
         @RequestParam(required = false) levelId: Long?,
-    ): Page<AssignmentResponse> = service.list(AssignmentFilter(status.orEmpty(), studentId, taskId, levelId), pageable)
+        @RequestParam(required = false) categoryId: Long?,
+    ): Page<AssignmentResponse> =
+        service.list(AssignmentFilter(status.orEmpty(), studentId, taskId, levelId, categoryId), pageable)
 
     @GetMapping("/api/assignments/{id}")
     fun get(@PathVariable id: Long): AssignmentResponse = service.get(id)

@@ -23,16 +23,18 @@ class TaskService(
     private val assignments: AssignmentRepository,
     private val users: UserRepository,
     private val levels: LevelRepository,
+    private val categories: TaskCategoryService,
     private val currentUser: CurrentUser,
 ) {
 
-    fun list(q: String?, includeArchived: Boolean, pageable: Pageable, levelId: Long? = null): Page<TaskResponse> {
+    fun list(q: String?, includeArchived: Boolean, pageable: Pageable, levelId: Long? = null, categoryId: Long? = null): Page<TaskResponse> {
         val teacherId = currentUser.id
         val spec = Specification<Task> { root, _, cb ->
             val predicates = buildList {
                 add(cb.equal(root.get<Any>("teacher").get<Long>("id"), teacherId))
                 if (!includeArchived) add(cb.isFalse(root.get("archived")))
                 levelId?.let { add(cb.equal(root.get<Any>("level").get<Long>("id"), it)) }
+                categoryId?.let { add(cb.equal(root.get<Any>("category").get<Long>("id"), it)) }
                 q?.trim()?.takeIf { it.isNotEmpty() }?.let {
                     add(cb.like(cb.lower(root.get("title")), "%${escapeLike(it.lowercase())}%", '\\'))
                 }
@@ -56,6 +58,7 @@ class TaskService(
             title = request.title.trim(),
             instructions = request.instructions.trim(),
             level = level(request.levelId, current = null),
+            category = categories.resolve(request.categoryId),
         )
         return tasks.saveAndFlush(task).toResponse(0)
     }
@@ -63,7 +66,12 @@ class TaskService(
     @Transactional
     fun update(id: Long, request: TaskRequest): TaskResponse {
         val task = findOwn(id)
-        task.edit(request.title.trim(), request.instructions.trim(), level(request.levelId, current = task.level))
+        task.edit(
+            request.title.trim(),
+            request.instructions.trim(),
+            level(request.levelId, current = task.level),
+            categories.resolve(request.categoryId),
+        )
         return task.toResponse(assignments.countByTaskId(id))
     }
 

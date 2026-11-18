@@ -25,6 +25,7 @@ class Task(
     title: String,
     instructions: String,
     level: Level? = null,
+    category: TaskCategory? = null,
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -48,6 +49,12 @@ class Task(
     var level: Level? = level
         protected set
 
+    /** Optional category of the teacher's own (see TaskCategory). */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "category_id")
+    var category: TaskCategory? = category
+        protected set
+
     /** Archived tasks are hidden from the default list and cannot be assigned. */
     @Column(nullable = false)
     var archived: Boolean = false
@@ -57,10 +64,11 @@ class Task(
     var updatedAt: Instant = createdAt
         protected set
 
-    fun edit(title: String, instructions: String, level: Level?) {
+    fun edit(title: String, instructions: String, level: Level?, category: TaskCategory?) {
         this.title = title
         this.instructions = instructions
         this.level = level
+        this.category = category
         updatedAt = Instant.now()
     }
 
