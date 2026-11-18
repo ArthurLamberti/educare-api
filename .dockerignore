@@ -2,8 +2,12 @@
 .gradle
 .kotlin
 .idea
+.claude
+.github
 build
 deploy
+openspec
+*.log
 *.md
 .env*
-compose.yaml
+docker-compose*.yml

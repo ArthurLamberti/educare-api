@@ -13,7 +13,7 @@ REST API for Educare (Kotlin, Spring Boot 4, PostgreSQL). The web frontend lives
 ./gradlew bootRun
 ```
 
-`bootRun` starts the PostgreSQL and Mailpit services from `compose.yaml` automatically (Spring Boot Docker Compose
+`bootRun` starts the PostgreSQL and Mailpit services from `docker-compose.local.yml` automatically (Spring Boot Docker Compose
 support), stops it again when the API shuts down, and applies the database migrations. If the
 container is already running it is reused and left running. The API listens on http://localhost:8080.
 
@@ -421,7 +421,7 @@ never changes). Allowed to a school's admins and to the teacher of an individual
 
 The `prod` profile (Dockerfile) takes everything from the environment: `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`,
 `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, plus the `EDUCARE_*` variables above.
-Deploying with Docker Compose and nginx on a VPS: [deploy/README.md](deploy/README.md).
+Docker images, the VPS stack, the CI/CD pipeline and releases: [docker-compose.md](docker-compose.md).
 
 ## Testing
 

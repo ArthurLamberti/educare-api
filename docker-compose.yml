@@ -1,0 +1,75 @@
+# VPS stack: PostgreSQL and the API. The web (educare-web, docker-compose.prod.yml) joins the external network
+# `educare-net` and calls the API by container name. Every port is bound to 127.0.0.1.
+# Requires the network: docker network create educare-net
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: educare-postgres
+    environment:
+      POSTGRES_DB: ${DATABASE_NAME:-educare}
+      POSTGRES_USER: ${DATABASE_USERNAME:-educare}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:?DATABASE_PASSWORD is required}
+    ports:
+      # Localhost only: on the VPS the database is reached through an SSH tunnel
+      - "127.0.0.1:${DATABASE_PORT:-5434}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - educare-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USERNAME:-educare} -d ${DATABASE_NAME:-educare}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    # On the VPS the image comes from GHCR (pipeline); API_IMAGE_TAG pins the commit, default latest
+    image: ghcr.io/arthurlamberti/educare-api:${API_IMAGE_TAG:-latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: educare-api
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
+      DB_URL: ${DATABASE_URL:-jdbc:postgresql://postgres:5432/educare}
+      DB_USERNAME: ${DATABASE_USERNAME:-educare}
+      DB_PASSWORD: ${DATABASE_PASSWORD:?DATABASE_PASSWORD is required}
+      # Tokens and the /api/platform/** key
+      EDUCARE_JWT_SECRET: ${EDUCARE_JWT_SECRET:?EDUCARE_JWT_SECRET is required}
+      EDUCARE_PLATFORM_KEY: ${EDUCARE_PLATFORM_KEY:?EDUCARE_PLATFORM_KEY is required}
+      # System admin (operator panel), created at startup if missing
+      EDUCARE_ADMIN_EMAIL: ${EDUCARE_ADMIN_EMAIL:?EDUCARE_ADMIN_EMAIL is required}
+      # Links in emails: <scheme>://<school>.<root domain>
+      EDUCARE_WEB_ROOT_DOMAIN: ${ROOT_DOMAIN:?ROOT_DOMAIN is required}
+      EDUCARE_WEB_SCHEME: ${WEB_SCHEME:-https}
+      # Email (sign-up confirmation, password reset, notices)
+      MAIL_HOST: ${SMTP_HOST:?SMTP_HOST is required}
+      MAIL_PORT: ${SMTP_PORT:-587}
+      MAIL_USERNAME: ${SMTP_USERNAME:-}
+      MAIL_PASSWORD: ${SMTP_PASSWORD:-}
+      MAIL_SMTP_AUTH: ${SMTP_AUTH:-true}
+      MAIL_SMTP_STARTTLS: ${SMTP_STARTTLS:-true}
+      EDUCARE_MAIL_FROM: ${MAIL_FROM:?MAIL_FROM is required}
+      EDUCARE_MAIL_OPERATOR: ${MAIL_OPERATOR:-}
+      # Virtual rooms of online lessons (LiveKit); empty: joining them answers 503
+      EDUCARE_LIVEKIT_URL: ${LIVEKIT_URL:-}
+      EDUCARE_LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-}
+      EDUCARE_LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-}
+    ports:
+      # Localhost only: the web reaches the API through educare-net; this is for SSH tunnels
+      - "127.0.0.1:${SERVER_PORT:-8082}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - educare-net
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  educare-net:
+    external: true

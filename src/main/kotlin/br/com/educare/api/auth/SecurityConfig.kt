@@ -72,7 +72,7 @@ class SecurityConfig {
                     ).permitAll()
                     .requestMatchers("/api/platform/**").access(platformAccess)
                     .requestMatchers("/api/public/**").permitAll()
-                    .requestMatchers("/actuator/health", "/actuator/info", "/error").permitAll()
+                    .requestMatchers("/actuator/health", "/actuator/health/liveness", "/actuator/health/readiness", "/actuator/info", "/error").permitAll()
                     .anyRequest().authenticated()
             }
             .oauth2ResourceServer {

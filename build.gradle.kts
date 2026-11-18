@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "br.com.educare"
-version = "0.0.1-SNAPSHOT"
+version = "0.0.0" // x-release-please-version
 
 java {
 	toolchain {
