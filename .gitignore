@@ -39,3 +39,6 @@ out/
 ### Kotlin ###
 .kotlin
 .env.local
+
+### Deploy ###
+deploy/.env

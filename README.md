@@ -417,6 +417,12 @@ never changes). Allowed to a school's admins and to the teacher of an individual
 | `EDUCARE_MAIL_OPERATOR` | Who is told that a new space waits for activation (empty: nobody; dev: `operador@educare.localhost`) |
 | `MAIL_HOST`, `MAIL_PORT` | SMTP in `dev` (default Mailpit, `localhost:1026`); in `prod` set `SPRING_MAIL_HOST`, `SPRING_MAIL_PORT`, `SPRING_MAIL_USERNAME`, `SPRING_MAIL_PASSWORD`. Without an SMTP host, emails are only logged |
 
+## Production
+
+The `prod` profile (Dockerfile) takes everything from the environment: `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`,
+`MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, plus the `EDUCARE_*` variables above.
+Deploying with Docker Compose and nginx on a VPS: [deploy/README.md](deploy/README.md).
+
 ## Testing
 
 ```bash

@@ -81,7 +81,16 @@ spring:
   config:
     activate:
       on-profile: prod
+  # Everything comes from the environment (see deploy/.env.example); nothing secret has a default.
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/educare}
-    username: ${DB_USERNAME:educare}
-    password: ${DB_PASSWORD:educare}
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+  mail:
+    host: ${MAIL_HOST}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail.smtp.auth: ${MAIL_SMTP_AUTH:true}
+      mail.smtp.starttls.enable: ${MAIL_SMTP_STARTTLS:true}

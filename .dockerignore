@@ -1,0 +1,9 @@
+.git
+.gradle
+.kotlin
+.idea
+build
+deploy
+*.md
+.env*
+compose.yaml
