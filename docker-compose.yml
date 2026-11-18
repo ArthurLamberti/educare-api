@@ -11,7 +11,7 @@ services:
       POSTGRES_PASSWORD: ${DATABASE_PASSWORD:?DATABASE_PASSWORD is required}
     ports:
       # Localhost only: on the VPS the database is reached through an SSH tunnel
-      - "127.0.0.1:${DATABASE_PORT:-5434}:5432"
+      - "127.0.0.1:${DATABASE_PORT:-5436}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:

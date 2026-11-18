@@ -20,7 +20,7 @@ through the internet or nginx. Every port is bound to `127.0.0.1`; the host's ng
 
 | Container | Port on the VPS (127.0.0.1) |
 |---|---|
-| `educare-postgres` | `DATABASE_PORT`, default 5434 (SSH tunnel) |
+| `educare-postgres` | `DATABASE_PORT`, default 5436 (SSH tunnel) |
 | `educare-api` | `SERVER_PORT`, default 8082 (SSH tunnel; the web uses the network) |
 | `educare-web` | `WEB_PORT`, default 3002 (nginx) |
 
@@ -108,7 +108,7 @@ API_IMAGE_TAG=<previous sha> docker compose up -d --no-build --no-deps api
 ### Database
 
 ```bash
-ssh -L 5434:127.0.0.1:5434 <user>@<vps>   # then connect to localhost:5434
+ssh -L 5436:127.0.0.1:5436 <user>@<vps>   # then connect to localhost:5436
 # backup on the VPS:
 docker exec educare-postgres pg_dump -U educare educare | gzip > educare-$(date +%F).sql.gz
 ```
