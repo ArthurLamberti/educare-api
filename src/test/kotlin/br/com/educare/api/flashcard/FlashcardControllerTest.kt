@@ -60,7 +60,8 @@ class FlashcardControllerTest : IntegrationTest() {
         }
         addAll(mariaId, "house" to "casa", "cat" to "gato").andExpect {
             status { isCreated() }
-            jsonPath("$[*].front") { value(contains("house", "cat")) }
+            jsonPath("$.added[*].front") { value(contains("house", "cat")) }
+            jsonPath("$.skipped", hasSize<Any>(0))
         }
         mockMvc.get("/api/students/$mariaId/cards") { auth("alpha", ana) }.andExpect {
             jsonPath("$[*].front") { value(contains("dog", "house", "cat")) }
@@ -134,18 +135,95 @@ class FlashcardControllerTest : IntegrationTest() {
     @Test
     fun `a student has at most 2000 cards`() {
         jdbc.update(
-            """insert into cards (tenant_id, student_id, front, back, created_at, updated_at)
-               select 1, ?, 'f' || g, 'b' || g, now(), now() from generate_series(1, 1999) g""",
+            """insert into cards (tenant_id, student_id, front, front_key, back, created_at, updated_at)
+               select 1, ?, 'f' || g, 'f' || g, 'b' || g, now(), now() from generate_series(1, 1999) g""",
             mariaId,
         )
         addAll(mariaId, "a" to "1", "b" to "2").andExpect {
             status { isConflict() }
             jsonPath("$.detail") { value("A student can have at most 2000 cards; they have 1999, so at most 1 more can be added") }
         }
-        add(mariaId, "a").andExpect { status { isCreated() } }
+        // only the cards actually added count: a duplicate does not take the last place
+        addAll(mariaId, "f1" to "1", "a" to "1").andExpect {
+            status { isCreated() }
+            jsonPath("$.skipped[0]") { value("f1") }
+        }
         add(mariaId, "b").andExpect {
             status { isConflict() }
             jsonPath("$.detail") { value("A student can have at most 2000 cards") }
         }
+    }
+
+    @Test
+    fun `a single card whose front the student already has is refused`() {
+        add(mariaId, "Apple", "maçã").andExpect { status { isCreated() } }
+        add(mariaId, "  apple ").andExpect {
+            status { isConflict() }
+            jsonPath("$.detail") { value("The student already has a card for \"apple\"") }
+        }
+        add(mariaId, "APPLE").andExpect { status { isConflict() } }
+        // accents count, and another student is independent
+        add(mariaId, "café").andExpect { status { isCreated() } }
+        add(mariaId, "cafe").andExpect { status { isCreated() } }
+        add(joaoId, "apple").andExpect { status { isCreated() } }
+        mockMvc.get("/api/students/$mariaId/cards") { auth("alpha", ana) }.andExpect {
+            jsonPath("$[*].front") { value(contains("Apple", "café", "cafe")) }
+        }
+    }
+
+    @Test
+    fun `inner spaces are collapsed when comparing fronts`() {
+        add(mariaId, "ice cream").andExpect { status { isCreated() } }
+        add(mariaId, "Ice   Cream").andExpect { status { isConflict() } }
+    }
+
+    @Test
+    fun `a batch skips the duplicates and adds the rest`() {
+        add(mariaId, "apple")
+        addAll(mariaId, "Apple" to "1", "pear" to "2", " Pear " to "3", "plum" to "4").andExpect {
+            status { isCreated() }
+            jsonPath("$.added[*].front") { value(contains("pear", "plum")) }
+            jsonPath("$.added[0].back") { value("2") }
+            jsonPath("$.skipped") { value(contains("Apple", "Pear")) }
+        }
+        addAll(mariaId, "APPLE" to "1", "plum" to "2").andExpect {
+            status { isConflict() }
+            jsonPath("$.detail") { value("All these cards are already in the student's flashcards") }
+        }
+        mockMvc.get("/api/students/$mariaId/cards") { auth("alpha", ana) }.andExpect {
+            jsonPath("$[*].front") { value(contains("apple", "pear", "plum")) }
+        }
+    }
+
+    @Test
+    fun `editing a card into another card's front is refused, changing its own case is not`() {
+        add(mariaId, "dog")
+        val catId = id(add(mariaId, "cat").andReturn().response.contentAsString)
+        mockMvc.put("/api/cards/$catId") {
+            auth("alpha", ana)
+            json("""{"front":"Dog","back":"x"}""")
+        }.andExpect { status { isConflict() } }
+        mockMvc.put("/api/cards/$catId") {
+            auth("alpha", ana)
+            json("""{"front":"Cat","back":"gato"}""")
+        }.andExpect {
+            status { isOk() }
+            jsonPath("$.front") { value("Cat") }
+        }
+        mockMvc.get("/api/students/$mariaId/cards") { auth("alpha", ana) }.andExpect {
+            jsonPath("$[*].front") { value(contains("dog", "Cat")) }
+        }
+    }
+
+    @Test
+    fun `the database refuses a duplicate that slips past the check`() {
+        add(mariaId, "dog")
+        val error = runCatching {
+            jdbc.update(
+                "insert into cards (tenant_id, student_id, front, front_key, back, created_at, updated_at) select tenant_id, student_id, 'DOG', 'dog', 'x', now(), now() from cards where student_id = ?",
+                mariaId,
+            )
+        }.exceptionOrNull()
+        assert(error?.message.orEmpty().contains("ux_cards_student_front")) { "expected the unique index to refuse it, got $error" }
     }
 }

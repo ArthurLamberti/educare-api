@@ -9,4 +9,7 @@ interface CardRepository : JpaRepository<Card, Long> {
     fun findByStudentIdOrderById(studentId: Long): List<Card>
 
     fun countByStudentId(studentId: Long): Long
+
+    /** The student's cards among [frontKeys] (see Card.keyOf). */
+    fun findByStudentIdAndFrontKeyIn(studentId: Long, frontKeys: Collection<String>): List<Card>
 }

@@ -3,6 +3,7 @@ package br.com.educare.api.lesson
 import br.com.educare.api.support.IntegrationTest
 import br.com.educare.api.support.auth
 import br.com.educare.api.support.json
+import org.hamcrest.Matchers.contains
 import org.hamcrest.Matchers.containsString
 import org.hamcrest.Matchers.hasSize
 import org.hamcrest.Matchers.notNullValue
@@ -86,8 +87,9 @@ class LessonWordControllerTest : IntegrationTest() {
         add(ana, """[{"word":"went","meaning":"foi"},{"word":"bought","meaning":"comprou"}]""")
         mockMvc.post("/api/lessons/$lessonId/words/flashcards") { auth("alpha", ana) }.andExpect {
             status { isOk() }
-            jsonPath("$[0].flashcardSentAt") { value(notNullValue()) }
-            jsonPath("$[1].flashcardSentAt") { value(notNullValue()) }
+            jsonPath("$.words[0].flashcardSentAt") { value(notNullValue()) }
+            jsonPath("$.words[1].flashcardSentAt") { value(notNullValue()) }
+            jsonPath("$.skipped", hasSize<Any>(0))
         }
         mockMvc.get("/api/cards") { auth("alpha", maria) }.andExpect {
             jsonPath("$", hasSize<Any>(2))
@@ -104,6 +106,25 @@ class LessonWordControllerTest : IntegrationTest() {
             jsonPath("$[2].front") { value("saw") }
         }
         mockMvc.post("/api/lessons/$lessonId/words/flashcards") { auth("alpha", bob) }.andExpect { status { isNotFound() } }
+    }
+
+    @Test
+    fun `words the student already has as cards are skipped but marked as sent`() {
+        mockMvc.post("/api/students/$mariaId/cards") {
+            auth("alpha", ana)
+            json("""{"front":"went","back":"foi"}""")
+        }.andExpect { status { isCreated() } }
+        add(ana, """[{"word":"Went","meaning":"ir no passado"},{"word":"bought","meaning":"comprou"}]""")
+        mockMvc.post("/api/lessons/$lessonId/words/flashcards") { auth("alpha", ana) }.andExpect {
+            status { isOk() }
+            jsonPath("$.words[0].flashcardSentAt") { value(notNullValue()) }
+            jsonPath("$.words[1].flashcardSentAt") { value(notNullValue()) }
+            jsonPath("$.skipped") { value(contains("Went")) }
+        }
+        mockMvc.get("/api/cards") { auth("alpha", maria) }.andExpect {
+            jsonPath("$[*].front") { value(contains("went", "bought")) }
+            jsonPath("$[0].back") { value("foi") }
+        }
     }
 
     @Test

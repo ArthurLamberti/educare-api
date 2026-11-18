@@ -105,6 +105,12 @@ fun LessonWord.toResponse() = LessonWordResponse(
 )
 
 /** The task made from a lesson's words, assigned to its student. */
+/** The lesson's words and the ones skipped because the student already had them as cards. */
+data class LessonWordFlashcardsResponse(
+    val words: List<LessonWordResponse>,
+    val skipped: List<String>,
+)
+
 data class LessonWordTaskResponse(
     val taskId: Long,
     val assignmentId: Long,

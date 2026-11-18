@@ -16,6 +16,7 @@ import jakarta.persistence.Table
 import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
+import java.util.Locale
 
 /**
  * One flashcard of one student, with that student's spaced-repetition state. Edits keep the id and the
@@ -45,6 +46,11 @@ class Card(
 
     @Column(nullable = false, length = 1000)
     var back: String = back
+        protected set
+
+    /** [front] normalized by [keyOf]: unique per student, so a word is never on two cards. */
+    @Column(nullable = false, length = 1000)
+    var frontKey: String = keyOf(front)
         protected set
 
     @Column(nullable = false)
@@ -79,6 +85,7 @@ class Card(
     fun edit(front: String, back: String, at: Instant) {
         this.front = front
         this.back = back
+        frontKey = keyOf(front)
         updatedAt = at
     }
 
@@ -90,5 +97,15 @@ class Card(
         repetitions = scheduled.state.repetitions
         dueAt = scheduled.dueAt
         lastReviewedAt = at
+    }
+
+    companion object {
+        private val WHITESPACE = Regex("\\s+")
+
+        /**
+         * The duplicate key of a front: trimmed, inner whitespace collapsed, lowercased; accents count.
+         * Migration V18 computes the same key in SQL.
+         */
+        fun keyOf(front: String): String = front.trim().replace(WHITESPACE, " ").lowercase(Locale.ROOT)
     }
 }

@@ -31,7 +31,7 @@ class FlashcardController(private val service: FlashcardService) {
     @PostMapping("/api/students/{studentId}/cards/batch")
     @PreAuthorize("hasRole('TEACHER')")
     @ResponseStatus(HttpStatus.CREATED)
-    fun addAll(@PathVariable studentId: Long, @Valid @RequestBody request: CardBatchRequest): List<CardResponse> =
+    fun addAll(@PathVariable studentId: Long, @Valid @RequestBody request: CardBatchRequest): CardBatchResponse =
         service.addAll(studentId, requireNotNull(request.cards))
 
     @PutMapping("/api/cards/{id}")

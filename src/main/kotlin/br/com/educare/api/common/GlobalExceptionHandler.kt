@@ -32,6 +32,7 @@ class GlobalExceptionHandler {
             "ux_submissions_assignment" in message -> "This assignment already has a submission"
             "ux_assignments_open" in message -> "This task is already assigned to the student"
             "uk_tenants_slug" in message -> "This address is already taken"
+            "ux_cards_student_front" in message -> "The student already has a card with this front"
             else -> "The data conflicts with existing records"
         }
         return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, detail)

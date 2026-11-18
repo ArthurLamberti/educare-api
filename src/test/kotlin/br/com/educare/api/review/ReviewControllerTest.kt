@@ -45,8 +45,8 @@ class ReviewControllerTest : IntegrationTest() {
     /** [count] cards (fronts "c0", "c1", ...) of a student; returns their ids in creation order. */
     private fun cards(count: Int, studentId: Long = mariaId): List<Long> {
         jdbc.update(
-            """insert into cards (tenant_id, student_id, front, back, created_at, updated_at)
-               select 1, ?, 'c' || g, 'b' || g, now(), now() from generate_series(0, ? - 1) g order by g""",
+            """insert into cards (tenant_id, student_id, front, front_key, back, created_at, updated_at)
+               select 1, ?, 'c' || g, 'c' || g, 'b' || g, now(), now() from generate_series(0, ? - 1) g order by g""",
             studentId, count,
         )
         return jdbc.queryForList("select id from cards where student_id = ? order by id", Long::class.java, studentId).filterNotNull()

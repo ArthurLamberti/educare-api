@@ -31,7 +31,7 @@ class LessonWordController(private val service: LessonWordService) {
 
     @PostMapping("/api/lessons/{id}/words/flashcards")
     @PreAuthorize("hasRole('TEACHER')")
-    fun sendToFlashcards(@PathVariable id: Long): List<LessonWordResponse> = service.sendToFlashcards(id)
+    fun sendToFlashcards(@PathVariable id: Long): LessonWordFlashcardsResponse = service.sendToFlashcards(id)
 
     @PostMapping("/api/lessons/{id}/words/task")
     @PreAuthorize("hasRole('TEACHER')")

@@ -65,15 +65,16 @@ class LessonWordService(
 
     /** One flashcard (word / meaning) per word not yet sent, for the lesson's student; returns the whole list. */
     @Transactional
-    fun sendToFlashcards(lessonId: Long): List<LessonWordResponse> {
+    fun sendToFlashcards(lessonId: Long): LessonWordFlashcardsResponse {
         val lesson = ownLesson(lessonId)
         val all = words.findByLessonIdOrderById(lessonId)
         val pending = all.filter { it.flashcardSentAt == null }
         if (pending.isEmpty()) throw ConflictException("All words of this lesson are already in the student's flashcards")
-        flashcards.addAll(requireNotNull(lesson.student.id), pending.map { CardRequest(it.word, it.meaning) })
+        // Words the student already has as cards are skipped but still count as sent.
+        val result = flashcards.addNew(requireNotNull(lesson.student.id), pending.map { CardRequest(it.word, it.meaning) })
         val now = clock.instant()
         pending.forEach { it.sentToFlashcards(now) }
-        return all.map { it.toResponse() }
+        return LessonWordFlashcardsResponse(words = all.map { it.toResponse() }, skipped = result.skipped)
     }
 
     /**

@@ -14,10 +14,16 @@ data class CardRequest(
     val back: String,
 )
 
-/** Several cards at once, added in this order; all are saved or none. */
+/** Several cards at once, added in this order; duplicates are skipped, the others are saved together. */
 data class CardBatchRequest(
     @field:NotEmpty @field:Size(max = 500) @field:Valid
     val cards: List<CardRequest>?,
+)
+
+/** The cards added, in order, and the fronts skipped because the student already had them. */
+data class CardBatchResponse(
+    val added: List<CardResponse>,
+    val skipped: List<String>,
 )
 
 data class CardResponse(
