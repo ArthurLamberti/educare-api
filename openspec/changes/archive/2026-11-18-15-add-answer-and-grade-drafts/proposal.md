@@ -23,8 +23,9 @@ saving a grade publishes it to the student at once.
   items with a grade draft (`hasGradeDraft`).
 
 ## Impact
-- Migration V19: `assignments.answer_draft`, `assignments.answer_draft_saved_at`;
-  `submissions.draft_score`, `draft_feedback`, `grade_draft_saved_at`, `grade_draft_version`.
+- Migration V19: both drafts live on `assignments` (`answer_draft`, `answer_draft_saved_at`,
+  `grade_draft_score`, `grade_draft_feedback`, `grade_draft_saved_at`), not on `submissions`, whose
+  optimistic-lock `version` must change only when the answer changes.
 - `AssignmentResponse` gains `draft`, `gradeDraft`, `hasGradeDraft`.
 - Web (educare-web change 15): "Salvar rascunho"/"Enviar" for students, "Salvar correção"/"Enviar
   correção" for teachers.

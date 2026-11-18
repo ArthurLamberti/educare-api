@@ -31,6 +31,23 @@ data class AssignmentResponse(
     val submission: SubmissionView?,
     /** Present once graded. */
     val grade: GradeView?,
+    /** The student's private draft: only to that student, while one is saved. */
+    val draft: AnswerDraftView?,
+    /** The teacher's unpublished correction: only to the task's teacher, while one is saved. */
+    val gradeDraft: GradeDraftView?,
+    /** The task's teacher has an unpublished correction (always false for others). */
+    val hasGradeDraft: Boolean,
+)
+
+data class AnswerDraftView(
+    val answer: String,
+    val savedAt: Instant,
+)
+
+data class GradeDraftView(
+    val score: BigDecimal?,
+    val feedback: String?,
+    val savedAt: Instant,
 )
 
 data class SubmissionView(
@@ -58,21 +75,31 @@ private fun Submission.toGrade(): GradeView? {
     return GradeView(score, feedback.orEmpty(), requireNotNull(gradedAt), gradedBy?.name)
 }
 
-/** [submission] is this assignment's submission, if any (see SubmissionRepository). */
-fun Assignment.toResponse(now: Instant, submission: Submission?) = AssignmentResponse(
-    id = requireNotNull(id),
-    taskId = requireNotNull(task.id),
-    taskTitle = task.title,
-    instructions = task.instructions,
-    teacherId = requireNotNull(task.teacher.id),
-    teacherName = task.teacher.name,
-    studentId = requireNotNull(student.id),
-    studentName = student.user.name,
-    dueAt = dueAt,
-    assignedAt = assignedAt,
-    status = status,
-    overdue = isOverdue(now),
-    submission = submission?.toView(),
-    // Only graded work shows a grade (to the student and everyone else).
-    grade = submission?.takeIf { status == AssignmentStatus.GRADED }?.toGrade(),
-)
+/**
+ * [submission] is this assignment's submission, if any (see SubmissionRepository); [viewerId] is the
+ * user reading it, who decides which private draft is included.
+ */
+fun Assignment.toResponse(now: Instant, submission: Submission?, viewerId: Long): AssignmentResponse {
+    val isStudent = student.user.id == viewerId
+    val isTeacher = task.teacher.id == viewerId
+    return AssignmentResponse(
+        id = requireNotNull(id),
+        taskId = requireNotNull(task.id),
+        taskTitle = task.title,
+        instructions = task.instructions,
+        teacherId = requireNotNull(task.teacher.id),
+        teacherName = task.teacher.name,
+        studentId = requireNotNull(student.id),
+        studentName = student.user.name,
+        dueAt = dueAt,
+        assignedAt = assignedAt,
+        status = status,
+        overdue = isOverdue(now),
+        submission = submission?.toView(),
+        // Only graded work shows a grade (to the student and everyone else).
+        grade = submission?.takeIf { status == AssignmentStatus.GRADED }?.toGrade(),
+        draft = answerDraftSavedAt?.takeIf { isStudent }?.let { AnswerDraftView(answerDraft.orEmpty(), it) },
+        gradeDraft = gradeDraftSavedAt?.takeIf { isTeacher }?.let { GradeDraftView(gradeDraftScore, gradeDraftFeedback, it) },
+        hasGradeDraft = isTeacher && hasGradeDraft,
+    )
+}

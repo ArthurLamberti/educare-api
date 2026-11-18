@@ -55,11 +55,11 @@ class AssignmentService(
         val byAssignment = page.content.mapNotNull { it.id }.takeIf { it.isNotEmpty() }
             ?.let { ids -> submissions.findByAssignmentIdIn(ids).associateBy { it.assignment.id } }
             .orEmpty()
-        return page.map { it.toResponse(now, byAssignment[it.id]) }
+        return page.map { it.toResponse(now, byAssignment[it.id], currentUser.id) }
     }
 
     fun toResponse(assignment: Assignment): AssignmentResponse =
-        assignment.toResponse(clock.instant(), submissions.findByAssignmentId(requireNotNull(assignment.id)))
+        assignment.toResponse(clock.instant(), submissions.findByAssignmentId(requireNotNull(assignment.id)), currentUser.id)
 
     private fun oldestSubmissionFirst() = Specification<Assignment> { root, query, cb ->
         val submission = (root as JpaRoot<Assignment>).join(Submission::class.java)
@@ -91,7 +91,7 @@ class AssignmentService(
 
         val byId = found.associateBy { it.id }
         val created = ids.map { Assignment(task = task, student = byId.getValue(it), dueAt = request.dueAt, assignedAt = now) }
-        return assignments.saveAllAndFlush(created).map { it.toResponse(now, null) }
+        return assignments.saveAllAndFlush(created).map { it.toResponse(now, null, currentUser.id) }
     }
 
     /** Only work that has not been submitted can be unassigned. */

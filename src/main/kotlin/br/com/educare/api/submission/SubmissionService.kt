@@ -17,10 +17,15 @@ import java.time.Clock
 /**
  * Answers and grades. Allowed transitions:
  *
- * | action | from                | to        | who                    |
- * |--------|---------------------|-----------|------------------------|
- * | submit | ASSIGNED, SUBMITTED | SUBMITTED | the assigned student   |
- * | grade  | SUBMITTED, GRADED   | GRADED    | the task's teacher     |
+ * | action      | from                | to        | who                    |
+ * |-------------|---------------------|-----------|------------------------|
+ * | draft       | ASSIGNED, SUBMITTED | unchanged | the assigned student   |
+ * | submit      | ASSIGNED, SUBMITTED | SUBMITTED | the assigned student   |
+ * | grade draft | SUBMITTED, GRADED   | unchanged | the task's teacher     |
+ * | grade       | SUBMITTED, GRADED   | GRADED    | the task's teacher     |
+ *
+ * Drafts are private: the student's is never shown to the teacher and the teacher's never to the
+ * student. Submitting clears the student's draft; grading clears the teacher's.
  *
  * Assignments the caller cannot act on are reported as 404.
  */
@@ -33,6 +38,15 @@ class SubmissionService(
     private val currentUser: CurrentUser,
     private val clock: Clock,
 ) {
+
+    fun saveDraft(assignmentId: Long, request: AnswerDraftRequest): AssignmentResponse {
+        val now = clock.instant()
+        val assignment = lock(assignmentId) { it.student.user.id == currentUser.id }
+        if (assignment.status == AssignmentStatus.GRADED) throw ConflictException("Graded work can no longer be changed")
+        assignment.saveAnswerDraft(requireNotNull(request.answer), now)
+        assignments.flush()
+        return assignment.toResponse(now, submissions.findByAssignmentId(assignmentId), currentUser.id)
+    }
 
     fun submit(assignmentId: Long, request: SubmitAnswerRequest): AssignmentResponse {
         val now = clock.instant()
@@ -53,23 +67,40 @@ class SubmissionService(
             AssignmentStatus.SUBMITTED -> current(assignment).also { it.editAnswer(answer, now) }
             AssignmentStatus.GRADED -> throw ConflictException("Graded work can no longer be changed")
         }
+        assignment.clearAnswerDraft()
         assignments.flush()
-        return assignment.toResponse(now, submission)
+        return assignment.toResponse(now, submission, currentUser.id)
+    }
+
+    fun saveGradeDraft(assignmentId: Long, request: GradeDraftRequest): AssignmentResponse {
+        val now = clock.instant()
+        val assignment = lock(assignmentId) { it.task.teacher.id == currentUser.id }
+        val submission = reviewed(assignment, request.version)
+        assignment.saveGradeDraft(request.score, request.feedback?.trim()?.ifEmpty { null }, now)
+        assignments.flush()
+        return assignment.toResponse(now, submission, currentUser.id)
     }
 
     fun grade(assignmentId: Long, request: GradeRequest): AssignmentResponse {
         val now = clock.instant()
         val assignment = lock(assignmentId) { it.task.teacher.id == currentUser.id }
-        if (assignment.status == AssignmentStatus.ASSIGNED) throw ConflictException("The student has not submitted an answer yet")
-        val submission = current(assignment)
-        if (request.version != null && request.version != submission.version) {
-            throw ConflictException("The student changed the answer after you opened it; reload to review the new answer")
-        }
+        val submission = reviewed(assignment, request.version)
         val teacher = users.findByIdOrNull(currentUser.id) ?: throw NotFoundException("User not found")
         submission.grade(requireNotNull(request.score), request.feedback.trim(), teacher, now)
         assignment.graded()
+        assignment.clearGradeDraft()
         assignments.flush()
-        return assignment.toResponse(now, submission)
+        return assignment.toResponse(now, submission, currentUser.id)
+    }
+
+    /** The submission to grade; 409 before the first answer or when it changed since [version] was read. */
+    private fun reviewed(assignment: Assignment, version: Long?): Submission {
+        if (assignment.status == AssignmentStatus.ASSIGNED) throw ConflictException("The student has not submitted an answer yet")
+        val submission = current(assignment)
+        if (version != null && version != submission.version) {
+            throw ConflictException("The student changed the answer after you opened it; reload to review the new answer")
+        }
+        return submission
     }
 
     private fun current(assignment: Assignment): Submission =

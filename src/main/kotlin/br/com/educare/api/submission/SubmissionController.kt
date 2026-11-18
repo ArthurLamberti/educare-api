@@ -11,6 +11,18 @@ import org.springframework.web.bind.annotation.RestController
 @RestController
 class SubmissionController(private val service: SubmissionService) {
 
+    /** Save the student's private draft (until graded); the teacher never sees it. */
+    @PutMapping("/api/assignments/{id}/draft")
+    @PreAuthorize("hasRole('STUDENT')")
+    fun saveDraft(@PathVariable id: Long, @Valid @RequestBody request: AnswerDraftRequest): AssignmentResponse =
+        service.saveDraft(id, request)
+
+    /** Save the teacher's unpublished correction; the student never sees it. */
+    @PutMapping("/api/assignments/{id}/grade-draft")
+    @PreAuthorize("hasRole('TEACHER')")
+    fun saveGradeDraft(@PathVariable id: Long, @Valid @RequestBody request: GradeDraftRequest): AssignmentResponse =
+        service.saveGradeDraft(id, request)
+
     /** Submit or replace the answer (until graded). */
     @PutMapping("/api/assignments/{id}/submission")
     @PreAuthorize("hasRole('STUDENT')")

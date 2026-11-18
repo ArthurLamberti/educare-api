@@ -6,7 +6,7 @@ Lets students answer their assignments, lets teachers grade answers with a 0-10 
 ## Requirements
 
 ### Requirement: Submit an answer
-The system SHALL let the assigned `STUDENT` submit or replace their answer through `PUT /api/assignments/{id}/submission` with `answer` (required, max 20000 chars) while the assignment is `ASSIGNED` or `SUBMITTED`. The first submission SHALL set the status to `SUBMITTED`, record `submittedAt`, and snapshot the task instructions. Each later edit SHALL update the answer and `updatedAt`.
+The system SHALL let the assigned `STUDENT` submit or replace their answer through `PUT /api/assignments/{id}/submission` with `answer` (required, max 20000 chars) while the assignment is `ASSIGNED` or `SUBMITTED`, that is, until the teacher publishes a grade. The first submission SHALL set the status to `SUBMITTED`, record `submittedAt`, and snapshot the task instructions. Each later submission SHALL replace the answer and update `updatedAt`. Every submission SHALL clear the student's answer draft.
 
 #### Scenario: First submission
 - **WHEN** a student submits an answer to an `ASSIGNED` assignment
@@ -15,6 +15,10 @@ The system SHALL let the assigned `STUDENT` submit or replace their answer throu
 #### Scenario: Edit before grading
 - **WHEN** the student submits again while it is `SUBMITTED`
 - **THEN** the answer is replaced and `submittedAt` keeps the first submission time
+
+#### Scenario: Edit while the teacher has a grade draft
+- **WHEN** the teacher saved a grade draft but did not publish it and the student submits again
+- **THEN** the answer is replaced and the submission `version` changes
 
 #### Scenario: Edit after grading
 - **WHEN** the student submits to a `GRADED` assignment
@@ -59,3 +63,33 @@ The system SHALL let a teacher list assignments awaiting grading with `GET /api/
 #### Scenario: Queue order
 - **WHEN** two students submitted at different times
 - **THEN** the earlier submission is listed first
+
+### Requirement: Answer draft
+The assigned `STUDENT` SHALL be able to save a private draft of their answer through `PUT /api/assignments/{id}/draft` with `answer` (may be blank, max 20000 chars) while the assignment is `ASSIGNED` or `SUBMITTED`; with `GRADED` the system SHALL respond 409. Saving a draft SHALL NOT change the status, the submitted answer or `updatedAt`. The draft and its save time SHALL be returned only to that student; the teacher and admins SHALL never see it. Submitting an answer SHALL clear the draft.
+
+#### Scenario: Draft before the first submission
+- **WHEN** a student saves a draft of an `ASSIGNED` assignment
+- **THEN** the status stays `ASSIGNED` and the teacher's response has no answer and no draft
+
+#### Scenario: Draft after submitting
+- **WHEN** a student saves a draft of a `SUBMITTED` assignment
+- **THEN** the teacher still sees the submitted answer and the student sees both the submitted answer and the draft
+
+#### Scenario: Submit clears the draft
+- **WHEN** the student submits after saving a draft
+- **THEN** the submitted answer is the sent text and the draft is gone
+
+### Requirement: Grade draft
+The teacher of the assignment's task SHALL be able to save a private correction through `PUT /api/assignments/{id}/grade-draft` with optional `score` (same rules as grading), optional `feedback` (max 10000) and the reviewed submission `version`, while the assignment is `SUBMITTED` or `GRADED`; with `ASSIGNED` the system SHALL respond 409, and with a `version` other than the current one it SHALL respond 409. Saving SHALL NOT change the status or the published grade. The draft SHALL be returned only to that teacher, and lists SHALL flag assignments with a grade draft (`hasGradeDraft`) for them. Publishing a grade SHALL clear the draft.
+
+#### Scenario: Correction in progress
+- **WHEN** the teacher saves a grade draft of a `SUBMITTED` assignment
+- **THEN** the status stays `SUBMITTED`, the student sees no score or feedback, and the teacher gets the draft back
+
+#### Scenario: Revising a published grade
+- **WHEN** the teacher saves a grade draft of a `GRADED` assignment
+- **THEN** the student keeps seeing the published score and feedback until the teacher publishes the new grade
+
+#### Scenario: Answer changed meanwhile
+- **WHEN** the student resubmits after the teacher opened the answer and the teacher saves a draft with the old version
+- **THEN** the system responds 409
