@@ -40,6 +40,7 @@ class LessonService(
     private val users: UserRepository,
     private val currentUser: CurrentUser,
     private val events: ApplicationEventPublisher,
+    private val roomProvider: VirtualRoomProvider,
     private val clock: Clock,
 ) {
 
@@ -47,6 +48,29 @@ class LessonService(
         lessons.findAll(visibleTo().and(filter.toSpec()), pageable).map { it.toResponse() }
 
     fun get(id: Long): LessonResponse = findVisible(id).toResponse()
+
+    /**
+     * Where the lesson's teacher or student joins it: a provider link to its virtual room, made now for this
+     * user (named; the teacher hosts; valid until an hour after the lesson), or the teacher's own link.
+     * 404 for others or in-person lessons; 409 if canceled.
+     */
+    fun room(id: Long): LessonRoomResponse {
+        val lesson = findVisible(id)
+        val userId = currentUser.id
+        if (lesson.teacher.id != userId && lesson.student.user.id != userId) throw NotFoundException("Lesson $id not found")
+        if (lesson.status != LessonStatus.SCHEDULED) throw ConflictException("This lesson was canceled")
+        lesson.virtualRoomKey?.let { key ->
+            val participant = RoomParticipant(
+                id = "user-$userId",
+                name = users.findByIdOrNull(userId)?.name ?: "",
+                host = lesson.teacher.id == userId,
+            )
+            val until = maxOf(lesson.endsAt, clock.instant()).plus(Duration.ofHours(1))
+            val access = roomProvider.join(key, participant, until)
+            return LessonRoomResponse(access.url, embedded = true, provider = access.provider, token = access.token)
+        }
+        return LessonRoomResponse(lesson.meetingUrl ?: throw NotFoundException("Lesson $id is not online"), embedded = false)
+    }
 
     @Transactional
     fun create(request: CreateLessonRequest): LessonResponse {
@@ -62,7 +86,8 @@ class LessonService(
             durationMinutes = duration,
             topic = request.topic.trim(),
             notes = request.notes?.trim()?.ifEmpty { null },
-            meetingUrl = normalizeMeetingUrl(request.meetingUrl),
+            meetingUrl = meetingUrlFor(request.meetingUrl, request.virtualRoom),
+            virtualRoomKey = if (request.virtualRoom) RoomKeys.newKey() else null,
         )
         return lessons.saveAndFlush(lesson).toResponse()
     }
@@ -78,7 +103,9 @@ class LessonService(
         }
         lesson.topic = request.topic.trim()
         lesson.notes = request.notes?.trim()?.ifEmpty { null }
-        lesson.meetingUrl = normalizeMeetingUrl(request.meetingUrl)
+        lesson.meetingUrl = meetingUrlFor(request.meetingUrl, request.virtualRoom)
+        // Keep the lesson's room while it stays a virtual-room lesson, so links already opened still work.
+        lesson.virtualRoomKey = if (request.virtualRoom) lesson.virtualRoomKey ?: RoomKeys.newKey() else null
         lesson.touch()
         return lessons.saveAndFlush(lesson).toResponse()
     }
@@ -133,7 +160,7 @@ class LessonService(
             ?.takeIf { it.teacher.id == currentUser.id && it.user.active }
             ?: throw FieldValidationException("studentId", "must be one of your active students")
 
-    private fun findVisible(id: Long): Lesson =
+    fun findVisible(id: Long): Lesson =
         lessons.findOne(visibleTo().and { root, _, cb -> cb.equal(root.get<Long>("id"), id) }).orElse(null)
             ?: throw NotFoundException("Lesson $id not found")
 

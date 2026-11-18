@@ -38,6 +38,9 @@ data class CreateLessonSeriesRequest(
     /** Room link of an online lesson (http or https); empty or absent for an in-person lesson. */
     @field:Size(max = 500) @field:Pattern(regexp = MEETING_URL_PATTERN, message = "must be an http or https link")
     val meetingUrl: String? = null,
+
+    /** Online lesson in a virtual room created by Educare (then [meetingUrl] must be empty). */
+    val virtualRoom: Boolean = false,
 )
 
 /** Ends the series from [from] (school date, default today): its scheduled lessons from then on are canceled. */
@@ -55,6 +58,7 @@ data class LessonSeriesResponse(
     val topic: String,
     val notes: String?,
     val meetingUrl: String?,
+    val virtualRoom: Boolean,
     val startsOn: LocalDate,
     val generatedUntil: LocalDate,
     val endedAt: Instant?,
@@ -78,6 +82,7 @@ fun LessonSeries.toResponse(nextLessonAt: Instant?) = LessonSeriesResponse(
     topic = topic,
     notes = notes,
     meetingUrl = meetingUrl,
+    virtualRoom = virtualRoom,
     startsOn = startsOn,
     generatedUntil = generatedUntil,
     endedAt = endedAt,

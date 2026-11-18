@@ -19,5 +19,8 @@ class EmailNotConfirmedException : RuntimeException("Confirm your email address 
 /** A rate limit was hit. Rendered as 429 with `Retry-After`. */
 class TooManyRequestsException(val retryAfterSeconds: Long) : RuntimeException("Too many attempts; try again later")
 
+/** An outside service the request depends on is down or not configured. Rendered as 503. */
+class ServiceUnavailableException(message: String) : RuntimeException(message)
+
 /** The request is valid but a business rule refuses it (e.g. too late to ask). Rendered as 422. */
 class BusinessRuleException(message: String) : RuntimeException(message)

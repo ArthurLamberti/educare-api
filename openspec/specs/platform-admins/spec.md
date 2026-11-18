@@ -6,7 +6,7 @@ Gives the people who operate the platform their own accounts, outside any school
 ## Requirements
 
 ### Requirement: Default platform admin
-At startup the system SHALL create a platform admin with the email in `educare.platform.admin-email` (default `arthurlamberti001@gmail.com`) when none exists with it, with a random password. It SHALL never create a second one.
+At startup the system SHALL create a platform admin with the email in `educare.platform.admin-email` (set by `EDUCARE_ADMIN_EMAIL`, no default; when empty no admin is created) when none exists with it, with a random password. It SHALL never create a second one.
 
 #### Scenario: First start
 - **WHEN** the API starts with no platform admin for the configured email

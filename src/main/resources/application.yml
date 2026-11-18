@@ -23,7 +23,8 @@ educare:
     token-ttl: 12h
   platform:
     # System admin (operator panel), created at startup if missing; sets the password via "Esqueci a senha".
-    admin-email: ${EDUCARE_ADMIN_EMAIL:arthurlamberti001@gmail.com}
+    # Empty (EDUCARE_ADMIN_EMAIL unset): no admin is created.
+    admin-email: ${EDUCARE_ADMIN_EMAIL:}
     admin-name: ${EDUCARE_ADMIN_NAME:Administrador}
   web:
     root-domain: ${EDUCARE_WEB_ROOT_DOMAIN:localhost:3000}
@@ -32,6 +33,12 @@ educare:
     from: ${EDUCARE_MAIL_FROM:Educare <nao-responda@educare.localhost>}
     # Notified when a new private space waits for activation (empty = no notice).
     operator: ${EDUCARE_MAIL_OPERATOR:}
+  virtual-room:
+    # Virtual rooms of online lessons (LiveKit). Without url, key and secret, joining them answers 503.
+    livekit:
+      url: ${EDUCARE_LIVEKIT_URL:}
+      api-key: ${EDUCARE_LIVEKIT_API_KEY:}
+      api-secret: ${EDUCARE_LIVEKIT_API_SECRET:}
 
 ---
 spring:
@@ -44,6 +51,15 @@ educare:
     platform-key: ${EDUCARE_PLATFORM_KEY:dev-platform-key}
   mail:
     operator: ${EDUCARE_MAIL_OPERATOR:operador@educare.localhost}
+
+---
+spring:
+  config:
+    activate:
+      on-profile: test
+educare:
+  platform:
+    admin-email: admin@educare.test
 
 ---
 spring:

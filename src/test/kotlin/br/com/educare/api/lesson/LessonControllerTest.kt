@@ -307,4 +307,87 @@ class LessonControllerTest : IntegrationTest() {
         val lessonsUrls = jdbc.queryForList("SELECT DISTINCT meeting_url FROM lessons", String::class.java)
         kotlin.test.assertEquals(listOf("https://zoom.example.com/j/1"), lessonsUrls)
     }
+
+    private fun room(id: Long, token: String) =
+        jsonMapper.readTree(mockMvc.get("/api/lessons/$id/room") { auth("alpha", token) }.andReturn().response.contentAsString)
+
+    private fun roomUrl(id: Long, token: String): String = room(id, token).get("url").asString()
+
+    @Test
+    fun `a virtual room is joined through the lesson, never through a stored provider link`() {
+        val body = mockMvc.post("/api/lessons") {
+            auth("alpha", ana)
+            json("""{"studentId":$mariaId,"startsAt":"${at(10.0)}","durationMinutes":60,"topic":"Grammar","virtualRoom":true}""")
+        }.andExpect {
+            status { isCreated() }
+            jsonPath("$.virtualRoom") { value(true) }
+            jsonPath("$.meetingUrl") { value(null) }
+        }.andReturn().response.contentAsString
+        val id = jsonMapper.readTree(body).get("id").asLong()
+
+        // Teacher and student land in the same room, each with their own name; only the teacher hosts;
+        // access lasts until an hour after the lesson. The key is unguessable.
+        val teacherRoom = room(id, ana)
+        kotlin.test.assertTrue(teacherRoom.get("embedded").asBoolean())
+        kotlin.test.assertEquals("fake", teacherRoom.get("provider").asString())
+        kotlin.test.assertTrue(teacherRoom.get("token").asString().matches(Regex("token-user-\\d+")), teacherRoom.toString())
+        val teacherUrl = roomUrl(id, ana)
+        val studentUrl = roomUrl(id, maria)
+        val until = at(11.0).plus(Duration.ofHours(1)).epochSecond
+        kotlin.test.assertTrue(teacherUrl.matches(Regex("""https://rooms\.test/[0-9a-f]{32}\?name=Teacher.*&host=true&until=$until""")), teacherUrl)
+        kotlin.test.assertEquals(teacherUrl.substringBefore('?'), studentUrl.substringBefore('?'))
+        kotlin.test.assertTrue(studentUrl.contains("name=Maria&host=false"), studentUrl)
+
+        // Editing keeps the room; other users cannot get it.
+        mockMvc.put("/api/lessons/$id") {
+            auth("alpha", ana)
+            json("""{"startsAt":"${at(11.0)}","durationMinutes":60,"topic":"Grammar","virtualRoom":true}""")
+        }.andExpect { jsonPath("$.virtualRoom") { value(true) } }
+        kotlin.test.assertEquals(teacherUrl.substringBefore('?'), roomUrl(id, ana).substringBefore('?'))
+        listOf(bob, admin).forEach { token ->
+            mockMvc.get("/api/lessons/$id/room") { auth("alpha", token) }.andExpect { status { isNotFound() } }
+        }
+
+        // A room and a pasted link at once is refused.
+        mockMvc.put("/api/lessons/$id") {
+            auth("alpha", ana)
+            json("""{"startsAt":"${at(11.0)}","durationMinutes":60,"topic":"Grammar","virtualRoom":true,"meetingUrl":"https://zoom.example.com/j/1"}""")
+        }.andExpect {
+            status { isBadRequest() }
+            jsonPath("$.errors.meetingUrl") { exists() }
+        }
+
+        // Switching to the teacher's own link drops the room; the room endpoint then returns that link.
+        mockMvc.put("/api/lessons/$id") {
+            auth("alpha", ana)
+            json("""{"startsAt":"${at(11.0)}","durationMinutes":60,"topic":"Grammar","meetingUrl":"https://zoom.example.com/j/1"}""")
+        }.andExpect { jsonPath("$.virtualRoom") { value(false) } }
+        kotlin.test.assertEquals("https://zoom.example.com/j/1", roomUrl(id, maria))
+        val ownLink = room(id, maria)
+        kotlin.test.assertFalse(ownLink.get("embedded").asBoolean())
+        kotlin.test.assertTrue(ownLink.get("token").isNull, ownLink.toString())
+
+        // In-person lessons have no room, and canceled lessons cannot be joined.
+        val inPerson = createId(ana, joaoId, at(14.0))
+        mockMvc.get("/api/lessons/$inPerson/room") { auth("alpha", ana) }.andExpect { status { isNotFound() } }
+        mockMvc.post("/api/lessons/$id/cancel") { auth("alpha", ana) }
+        mockMvc.get("/api/lessons/$id/room") { auth("alpha", maria) }.andExpect { status { isConflict() } }
+    }
+
+    @Test
+    fun `a weekly series with a virtual room gives each lesson its own room`() {
+        val startsOn = day.atZone(java.time.ZoneId.of("America/Sao_Paulo")).toLocalDate()
+        mockMvc.post("/api/lesson-series") {
+            auth("alpha", ana)
+            json(
+                """{"studentId":$mariaId,"weekdays":["${startsOn.dayOfWeek}"],"startsOn":"$startsOn","startTime":"15:00",
+                   "durationMinutes":60,"topic":"Conversation","virtualRoom":true}""",
+            )
+        }.andExpect {
+            status { isCreated() }
+            jsonPath("$.series.virtualRoom") { value(true) }
+        }
+        val keys = jdbc.queryForList("SELECT virtual_room_key FROM lessons", String::class.java)
+        kotlin.test.assertTrue(keys.size > 1 && keys.all { it != null } && keys.toSet().size == keys.size, keys.toString())
+    }
 }

@@ -35,6 +35,10 @@ class LessonController(private val service: LessonService) {
     @GetMapping("/{id}")
     fun get(@PathVariable id: Long): LessonResponse = service.get(id)
 
+    /** Link to join an online lesson (its teacher and student only). */
+    @GetMapping("/{id}/room")
+    fun room(@PathVariable id: Long): LessonRoomResponse = service.room(id)
+
     @PostMapping
     @PreAuthorize("hasRole('TEACHER')")
     fun create(@Valid @RequestBody request: CreateLessonRequest): ResponseEntity<LessonResponse> {

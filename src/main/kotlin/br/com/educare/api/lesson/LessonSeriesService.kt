@@ -66,7 +66,8 @@ class LessonSeriesService(
                 durationMinutes = requireNotNull(request.durationMinutes),
                 topic = request.topic.trim(),
                 notes = request.notes?.trim()?.ifEmpty { null },
-                meetingUrl = normalizeMeetingUrl(request.meetingUrl),
+                meetingUrl = meetingUrlFor(request.meetingUrl, request.virtualRoom),
+                virtualRoom = request.virtualRoom,
                 startsOn = startsOn,
                 createdAt = now,
             ),
@@ -152,6 +153,7 @@ class LessonSeriesService(
         topic = s.topic,
         notes = s.notes,
         meetingUrl = s.meetingUrl,
+        virtualRoomKey = if (s.virtualRoom) RoomKeys.newKey() else null,
         series = s,
         createdAt = clock.instant(),
     )

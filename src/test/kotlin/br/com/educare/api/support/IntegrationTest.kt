@@ -24,7 +24,7 @@ import tools.jackson.databind.json.JsonMapper
 
 /** Base for API tests: real PostgreSQL, Spring Security, clean database and helpers per test. */
 @SpringBootTest
-@Import(TestcontainersConfiguration::class, ClockTestConfiguration::class, MailTestConfiguration::class)
+@Import(TestcontainersConfiguration::class, ClockTestConfiguration::class, MailTestConfiguration::class, RoomTestConfiguration::class)
 @ActiveProfiles("test")
 abstract class IntegrationTest {
 

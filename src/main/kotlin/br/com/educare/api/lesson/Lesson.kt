@@ -40,9 +40,13 @@ class Lesson(
     @Column(length = 2000)
     var notes: String? = null,
 
-    /** Room link; set for online lessons. */
+    /** A link the teacher pasted (Zoom, Meet, ...); set for online lessons without a virtual room. */
     @Column(length = 500)
     var meetingUrl: String? = null,
+
+    /** Key of the virtual room Educare created for this online lesson (see [VirtualRoomProvider]). */
+    @Column(length = 64)
+    var virtualRoomKey: String? = null,
 
     /** The recurring series that created this lesson, if any. */
     @ManyToOne(fetch = FetchType.LAZY)

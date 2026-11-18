@@ -18,7 +18,7 @@ class PasswordResetTest : IntegrationTest() {
 
     @Autowired lateinit var bootstrap: PlatformAdminBootstrap
 
-    private val admin = "arthurlamberti001@gmail.com"
+    private val admin = "admin@educare.test"
 
     private fun forgot(slug: String, email: String) = mockMvc.post("/api/auth/forgot-password") {
         header("X-Tenant", slug)

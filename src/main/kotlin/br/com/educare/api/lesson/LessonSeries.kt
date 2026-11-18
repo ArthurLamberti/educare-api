@@ -56,6 +56,10 @@ class LessonSeries(
     @Column(length = 500, updatable = false)
     val meetingUrl: String? = null,
 
+    /** Each lesson of the series gets a virtual room of its own. */
+    @Column(nullable = false, updatable = false)
+    val virtualRoom: Boolean = false,
+
     @Column(nullable = false, updatable = false)
     val startsOn: LocalDate,
 

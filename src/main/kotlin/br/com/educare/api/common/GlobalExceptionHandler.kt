@@ -46,6 +46,10 @@ class GlobalExceptionHandler {
     fun handleBusinessRule(ex: BusinessRuleException): ProblemDetail =
         ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_CONTENT, ex.message ?: "Not allowed by the school rules")
 
+    @ExceptionHandler(ServiceUnavailableException::class)
+    fun handleServiceUnavailable(ex: ServiceUnavailableException): ProblemDetail =
+        ProblemDetail.forStatusAndDetail(HttpStatus.SERVICE_UNAVAILABLE, ex.message ?: "Service unavailable")
+
     @ExceptionHandler(BadRequestException::class)
     fun handleBadRequest(ex: BadRequestException): ProblemDetail =
         ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.message ?: "Bad request")

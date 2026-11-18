@@ -89,9 +89,15 @@ clients convert to and from the school's `timeZone` (from `GET /api/tenant` or `
 
 | Endpoint | Who | Notes |
 |---|---|---|
-| `POST /api/lessons` | teacher | `studentId` (own active student), `startsAt` (future), `durationMinutes` (15-240), `topic`, `notes?`, `meetingUrl?` |
-| `PUT /api/lessons/{id}` | lesson's teacher | `startsAt`, `durationMinutes`, `topic`, `notes?`, `meetingUrl?`; the student never changes |
+| `POST /api/lessons` | teacher | `studentId` (own active student), `startsAt` (future), `durationMinutes` (15-240), `topic`, `notes?`, `meetingUrl?`, `virtualRoom?` |
+| `PUT /api/lessons/{id}` | lesson's teacher | `startsAt`, `durationMinutes`, `topic`, `notes?`, `meetingUrl?`, `virtualRoom?`; the student never changes |
+| `GET /api/lessons/{id}/room` | lesson's teacher and student | `{"url"}` to join an online lesson (404 if in person or not theirs, 409 if canceled) |
 | `PUT /api/lessons/{id}/annotations` | lesson's teacher | `{"text"}` (up to 10000, empty clears): notes about the lesson, any time and status; the student sees them |
+| `GET /api/lessons/{id}/words` | lesson's teacher and student, admins | the lesson's new words in order: `id`, `word`, `meaning`, `createdAt`, `flashcardSentAt`, `taskSentAt` |
+| `POST /api/lessons/{id}/words` | lesson's teacher | `{"words":[{"word","meaning"}]}` (up to 200 per lesson, all or nothing): adds words; answers the whole list |
+| `DELETE /api/lesson-words/{id}` | lesson's teacher | removes a word (cards and tasks already sent stay) |
+| `POST /api/lessons/{id}/words/flashcards` | lesson's teacher | one card (word / meaning) for the student per word not yet sent; 409 if none; answers the whole list |
+| `POST /api/lessons/{id}/words/task` | lesson's teacher | `{"dueAt?"}`: a task "write a sentence with each word" (in Portuguese) with the words not yet in a task, created in the teacher's library and assigned to the student; 409 if none; answers `{"taskId","assignmentId","words"}` |
 | `POST /api/lessons/{id}/cancel` | lesson's teacher | status `CANCELED`; the record is kept and the slot is freed |
 | `GET /api/lessons` | all | teachers see theirs, students theirs, admins all; filters `from`, `to` (`from <= startsAt < to`), `status`, `studentId`, `teacherId` (admin); ordered by `startsAt` (`sort=startsAt,desc` to reverse) |
 | `GET /api/lessons/{id}` | all | 404 when the caller cannot see it |
@@ -103,6 +109,18 @@ Canceled lessons cannot be edited (409), but their notes can.
 **Online lessons** have a `meetingUrl` (the room link, `http`/`https` only, up to 500); without it a
 lesson is in person. A weekly series accepts `meetingUrl` too and copies it to its lessons.
 
+Or `virtualRoom: true` (then `meetingUrl` must be empty): Educare creates the room. The lesson stores only
+a random, provider-neutral key (`virtual_room_key`); the provider's link is built when someone joins, through
+`GET /api/lessons/{id}/room`, so the provider can change (`VirtualRoomProvider`, today `LiveKitRoomProvider`)
+without touching lessons or clients. Editing keeps the room; a series gives each lesson its own room.
+
+The room endpoint answers `{"url","embedded","provider","token"}`. `embedded: true` is a virtual room: the web's
+client for `provider` (today `livekit`) connects to `url` with `token`, an access token signed by the API for this user
+(named, room admin for the teacher, valid until an hour after the lesson; LiveKit creates the room on the first join, so
+no call to LiveKit is made). `embedded: false` is the teacher's own link (`provider` and `token` null).
+Without `EDUCARE_LIVEKIT_URL`, `EDUCARE_LIVEKIT_API_KEY` and `EDUCARE_LIVEKIT_API_SECRET`, joining a virtual room
+answers 503. LiveKit Cloud's free Build plan (5,000 WebRTC minutes a month) needs no credit card.
+
 ```bash
 curl -s localhost:8080/api/lessons -H 'X-Tenant: demo' -H "Authorization: Bearer $TEACHER" \
   -H 'Content-Type: application/json' \
@@ -113,7 +131,7 @@ curl -s "localhost:8080/api/lessons?from=$(date -u +%FT%TZ)&status=SCHEDULED" \
 ```
 
 Response fields: `id`, `teacherId`, `teacherName`, `studentId`, `studentName`, `startsAt`, `endsAt`,
-`durationMinutes`, `topic`, `notes`, `meetingUrl`, `annotations`, `annotationsUpdatedAt`, `status`, `seriesId` (null unless created by a series), `createdAt`, `updatedAt`.
+`durationMinutes`, `topic`, `notes`, `meetingUrl`, `annotations`, `annotationsUpdatedAt`, `status`, `virtualRoom`, `seriesId` (null unless created by a series), `createdAt`, `updatedAt`.
 
 ### Weekly lessons (series)
 
@@ -356,7 +374,7 @@ The web has a panel for this at `http://localhost:3000/admin`, used by platform 
 
 ### Platform admin
 
-At startup the API creates the system admin `EDUCARE_ADMIN_EMAIL` (default `arthurlamberti001@gmail.com`)
+At startup the API creates the system admin `EDUCARE_ADMIN_EMAIL` (no default: unset, no admin is created)
 if it does not exist, with a random password. To set it, use "Esqueci a senha (ou primeiro acesso)" on
 `localhost:3000/admin/login`; in development the email lands in Mailpit (http://localhost:8026).
 
@@ -393,7 +411,9 @@ never changes). Allowed to a school's admins and to the teacher of an individual
 | `EDUCARE_PLATFORM_KEY` | Key for `/api/platform/**`. Required outside `dev`/`test` (dev default: `dev-platform-key`). |
 | `EDUCARE_WEB_ROOT_DOMAIN`, `EDUCARE_WEB_SCHEME` | Where educare-web runs, for links in emails (default `localhost:3000`, `http`) |
 | `EDUCARE_MAIL_FROM` | Sender of emails |
-| `EDUCARE_ADMIN_EMAIL`, `EDUCARE_ADMIN_NAME` | System admin created at startup if missing (default `arthurlamberti001@gmail.com`, "Administrador") |
+| `EDUCARE_ADMIN_EMAIL`, `EDUCARE_ADMIN_NAME` | System admin created at startup if missing (no default email: unset, none is created; name default "Administrador") |
+| `EDUCARE_LIVEKIT_URL` | LiveKit project URL (`wss://<project>.livekit.cloud`) for the virtual rooms of online lessons |
+| `EDUCARE_LIVEKIT_API_KEY`, `EDUCARE_LIVEKIT_API_SECRET` | LiveKit project API key and secret (any of the three empty: joining virtual rooms answers 503) |
 | `EDUCARE_MAIL_OPERATOR` | Who is told that a new space waits for activation (empty: nobody; dev: `operador@educare.localhost`) |
 | `MAIL_HOST`, `MAIL_PORT` | SMTP in `dev` (default Mailpit, `localhost:1026`); in `prod` set `SPRING_MAIL_HOST`, `SPRING_MAIL_PORT`, `SPRING_MAIL_USERNAME`, `SPRING_MAIL_PASSWORD`. Without an SMTP host, emails are only logged |
 

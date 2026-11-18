@@ -75,6 +75,17 @@ A lesson and a weekly series SHALL accept an optional `meetingUrl`, which SHALL 
 - **WHEN** a teacher creates a weekly series with a room link
 - **THEN** every generated lesson has that link
 
+### Requirement: Virtual rooms
+A lesson and a weekly series SHALL accept `virtualRoom: true` to have Educare create the room; `meetingUrl` SHALL then be empty (else 400 `errors.meetingUrl`). The lesson SHALL store only a random, provider-neutral room key and SHALL return `virtualRoom: true`, never a provider link. `GET /api/lessons/{id}/room` SHALL return to the lesson's teacher and student the access to join it, made at that moment by the configured provider for that user (named, the teacher as host, valid until an hour after the lesson) as `url`, `provider` and `token` with `embedded: true`, or the lesson's `meetingUrl` as `url` with `embedded: false`; when the provider is unavailable it SHALL respond 503; others SHALL get 404, in-person lessons 404 and canceled lessons 409. Editing a lesson that keeps its virtual room SHALL keep its key. A series SHALL give each lesson its own room.
+
+#### Scenario: Provider change
+- **WHEN** the configured provider changes
+- **THEN** existing lessons join through the new provider with no change for users
+
+#### Scenario: Room and link
+- **WHEN** a teacher sends `virtualRoom: true` and a `meetingUrl`
+- **THEN** the system responds 400 with `errors.meetingUrl`
+
 ### Requirement: Lesson notes
 The teacher of a lesson SHALL be able to set its notes (`annotations`, free text up to 10000 characters, empty clears them) through `PUT /api/lessons/{id}/annotations`, at any time and in any status. The system SHALL record when they last changed. Other users SHALL be refused. The lesson's student and the school's admins SHALL see the notes in the lesson.
 
@@ -85,3 +96,18 @@ The teacher of a lesson SHALL be able to set its notes (`annotations`, free text
 #### Scenario: Someone else
 - **WHEN** another teacher, the student or an admin sends notes
 - **THEN** the system refuses with a 4xx status
+
+### Requirement: New words of a lesson
+The teacher of a lesson SHALL be able to add new words to it (`POST /api/lessons/{id}/words` with `words`: `word` up to 200 and `meaning` up to 1000, both required; all or nothing; at most 200 words per lesson, else 409) and remove them (`DELETE /api/lesson-words/{id}`), at any time and in any status. The lesson's teacher and student and the school's admins SHALL read them in order (`GET /api/lessons/{id}/words`); others SHALL get 404. Each word SHALL record when it was sent to the flashcards and to a task. `POST /api/lessons/{id}/words/flashcards` SHALL add one card (front: word, back: meaning) to the lesson's student for each word not yet sent to the flashcards. `POST /api/lessons/{id}/words/task` (optional future `dueAt`) SHALL create in the teacher's library a task asking for one sentence with each word not yet sent in a task, listing those words, and SHALL assign it to the lesson's student. Each word SHALL be sent at most once to each place; with nothing left to send the system SHALL respond 409. Removing a word SHALL keep the cards and tasks already sent.
+
+#### Scenario: Send to flashcards
+- **WHEN** the teacher sends a lesson's words to the flashcards
+- **THEN** the student has one new card per word and the words record when they were sent
+
+#### Scenario: Words added later
+- **WHEN** the teacher adds a word after sending the others and sends again
+- **THEN** only the new word is sent
+
+#### Scenario: Sentence task
+- **WHEN** the teacher sends the words as a task with a due date
+- **THEN** the student has a new assignment with that due date whose instructions list the words
