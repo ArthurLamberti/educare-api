@@ -71,7 +71,7 @@ pull of the private package, log in first with a PAT that has `read:packages`.
 
 ### Preparing the VPS (once)
 
-1. DNS: `educare.arthurlamberti.com` and `*.educare.arthurlamberti.com` → VPS IP (A, and AAAA with IPv6).
+1. DNS (Hostinger): `educare.arthurlamberti.com` and `*.educare.arthurlamberti.com` → VPS IP (A records).
 2. Network and API stack:
 
    ```bash
@@ -84,14 +84,23 @@ pull of the private package, log in first with a PAT that has `read:packages`.
    The first push to `staging` deploys the API (or pull `latest` by hand: `docker compose up -d api`).
 3. Web stack: see `educare-web` (`docker-compose.prod.yml`, folder `/opt/educare-web`).
 4. HTTPS certificate. Schools are subdomains, so it must cover the wildcard, which Let's Encrypt only issues
-   through a DNS challenge. With the certbot plugin of your DNS provider (renews automatically), e.g. Cloudflare:
+   through a DNS challenge. The DNS is at Hostinger: `deploy/certbot-hostinger/` has certbot hooks that add and
+   remove the `_acme-challenge` TXT records through the Hostinger DNS API, so renewals are automatic.
 
    ```bash
-   sudo apt install python3-certbot-dns-cloudflare
-   # /root/.secrets/cloudflare.ini: dns_cloudflare_api_token = <token with Zone:DNS:Edit>; chmod 600
-   sudo certbot certonly --dns-cloudflare --dns-cloudflare-credentials /root/.secrets/cloudflare.ini \
+   # API token from hPanel -> Profile -> API
+   sudo install -d -m 700 /root/.secrets
+   sudo sh -c 'umask 077; echo "HOSTINGER_API_TOKEN=<token>" > /root/.secrets/hostinger.env'
+   sudo install -d /etc/letsencrypt/hostinger
+   sudo install -m 700 deploy/certbot-hostinger/*.sh /etc/letsencrypt/hostinger/
+   sudo certbot certonly --manual --preferred-challenges dns \
+     --manual-auth-hook /etc/letsencrypt/hostinger/auth.sh \
+     --manual-cleanup-hook /etc/letsencrypt/hostinger/cleanup.sh \
+     --deploy-hook "systemctl reload nginx" \
      -d educare.arthurlamberti.com -d '*.educare.arthurlamberti.com'
    ```
+
+   DNS records: `educare` and `*.educare` A → VPS IP.
 
 5. nginx: copy `deploy/nginx/educare.conf` to `/etc/nginx/sites-available/`, link it in `sites-enabled/`,
    then `sudo nginx -t && sudo systemctl reload nginx`.
