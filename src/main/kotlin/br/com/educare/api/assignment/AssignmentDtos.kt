@@ -3,6 +3,7 @@ package br.com.educare.api.assignment
 import br.com.educare.api.level.LevelResponse
 import br.com.educare.api.level.toResponse
 import br.com.educare.api.submission.Submission
+import br.com.educare.api.task.QuestionView
 import br.com.educare.api.task.TaskCategoryResponse
 import br.com.educare.api.task.toResponse
 import jakarta.validation.constraints.NotEmpty
@@ -27,6 +28,8 @@ data class AssignmentResponse(
     val level: LevelResponse?,
     /** The task's category, if any (the teacher's own). */
     val category: TaskCategoryResponse?,
+    /** The task's current questions; once submitted, answer those in `submission.answers`. */
+    val questions: List<QuestionView>,
     val teacherId: Long,
     val teacherName: String,
     val studentId: Long,
@@ -49,6 +52,8 @@ data class AssignmentResponse(
 
 data class AnswerDraftView(
     val answer: String,
+    /** Draft answers to the questions, by position (may be blank). */
+    val answers: List<String>,
     val savedAt: Instant,
 )
 
@@ -67,7 +72,11 @@ data class SubmissionView(
     val late: Boolean,
     /** Send it back with a grade so it never applies to an answer the teacher did not see. */
     val version: Long,
+    /** For tasks with questions: each prompt as the student saw it, with their answer, in order. */
+    val answers: List<AnswerView>,
 )
+
+data class AnswerView(val prompt: String, val answer: String)
 
 data class GradeView(
     val score: BigDecimal,
@@ -76,7 +85,9 @@ data class GradeView(
     val gradedByName: String?,
 )
 
-private fun Submission.toView() = SubmissionView(answer, instructionsSnapshot, submittedAt, updatedAt, late, version)
+private fun Submission.toView() = SubmissionView(
+    answer, instructionsSnapshot, submittedAt, updatedAt, late, version, answers.map { AnswerView(it.prompt, it.answer) },
+)
 
 private fun Submission.toGrade(): GradeView? {
     val score = score ?: return null
@@ -97,6 +108,7 @@ fun Assignment.toResponse(now: Instant, submission: Submission?, viewerId: Long)
         instructions = task.instructions,
         level = task.level?.toResponse(),
         category = task.category?.toResponse(),
+        questions = task.questions.map { QuestionView(it) },
         teacherId = requireNotNull(task.teacher.id),
         teacherName = task.teacher.name,
         studentId = requireNotNull(student.id),
@@ -108,7 +120,7 @@ fun Assignment.toResponse(now: Instant, submission: Submission?, viewerId: Long)
         submission = submission?.toView(),
         // Only graded work shows a grade (to the student and everyone else).
         grade = submission?.takeIf { status == AssignmentStatus.GRADED }?.toGrade(),
-        draft = answerDraftSavedAt?.takeIf { isStudent }?.let { AnswerDraftView(answerDraft.orEmpty(), it) },
+        draft = answerDraftSavedAt?.takeIf { isStudent }?.let { AnswerDraftView(answerDraft.orEmpty(), answerDraftAnswers, it) },
         gradeDraft = gradeDraftSavedAt?.takeIf { isTeacher }?.let { GradeDraftView(gradeDraftScore, gradeDraftFeedback, it) },
         hasGradeDraft = isTeacher && hasGradeDraft,
     )

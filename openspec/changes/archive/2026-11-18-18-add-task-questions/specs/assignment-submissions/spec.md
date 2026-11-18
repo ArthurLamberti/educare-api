@@ -3,7 +3,7 @@
 ## ADDED Requirements
 
 ### Requirement: Answer each question
-For a task with questions, submitting SHALL require `answers` with exactly one entry per question (`questionId`, `answer` required, max 5000), and the general `answer` SHALL become optional; unknown, repeated or missing questions SHALL respond 400 with `errors.answers`. The first submission SHALL copy each question's prompt and position into the submission with its answer; later submissions SHALL answer those copied questions, so editing the task SHALL NOT change a submission. The answer draft SHALL also accept per-question answers, which may be blank. Submission responses SHALL include the answers in order with their prompts. The teacher SHALL grade the whole submission with the single score and feedback.
+For a task with questions, submitting SHALL require `answers` with exactly one non-blank entry per question, in the questions' order (max 5000 each), and the general `answer` SHALL become optional; a different number of answers or a blank answer SHALL respond 400 with `errors.answers`. For a task without questions, sending `answers` SHALL respond 400 with `errors.answers`. The first submission SHALL copy each question's prompt and position into the submission with its answer; later submissions SHALL answer those copied questions, so editing the task SHALL NOT change a submission. The answer draft SHALL also accept per-question answers, which may be blank. Submission responses SHALL include the answers in order with their prompts. The teacher SHALL grade the whole submission with the single score and feedback.
 
 #### Scenario: All questions answered
 - **WHEN** a student submits an answer for each of the three questions

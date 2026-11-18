@@ -3,7 +3,7 @@
 ## ADDED Requirements
 
 ### Requirement: Task questions
-A task SHALL accept an optional ordered list of open `questions`, each with a `prompt` (required, max 2000), at most 50 per task, sent as the whole list on create and update. A task with at least one question SHALL accept empty `instructions`; a task without questions SHALL still require them. Task and assignment responses SHALL include the questions (id, position, prompt) in order.
+A task SHALL accept an optional ordered list of open `questions`, each with a `prompt` (required, max 2000), at most 50 per task, sent as the whole list on create and update. A task with at least one question SHALL accept empty `instructions`; a task without questions SHALL still require them. Task and assignment responses SHALL include the questions (prompt) in order; answers refer to them by position.
 
 #### Scenario: Task made of questions
 - **WHEN** a teacher creates a task with a title, three questions and no instructions

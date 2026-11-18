@@ -53,6 +53,7 @@ class TaskService(
     @Transactional
     fun create(request: TaskRequest): TaskResponse {
         val teacher = users.findByIdOrNull(currentUser.id) ?: throw NotFoundException("User not found")
+        val questions = questionsOf(request)
         val task = Task(
             teacher = teacher,
             title = request.title.trim(),
@@ -60,18 +61,22 @@ class TaskService(
             level = level(request.levelId, current = null),
             category = categories.resolve(request.categoryId),
         )
+        task.replaceQuestions(questions)
         return tasks.saveAndFlush(task).toResponse(0)
     }
 
     @Transactional
     fun update(id: Long, request: TaskRequest): TaskResponse {
         val task = findOwn(id)
+        val questions = questionsOf(request)
         task.edit(
             request.title.trim(),
             request.instructions.trim(),
             level(request.levelId, current = task.level),
             categories.resolve(request.categoryId),
         )
+        task.replaceQuestions(questions)
+        tasks.flush()
         return task.toResponse(assignments.countByTaskId(id))
     }
 
@@ -96,6 +101,15 @@ class TaskService(
     fun findOwn(id: Long): Task =
         tasks.findByIdOrNull(id)?.takeIf { it.teacher.id == currentUser.id }
             ?: throw NotFoundException("Task $id not found")
+
+    /** The trimmed prompts; instructions may only be empty when there is at least one question. */
+    private fun questionsOf(request: TaskRequest): List<String> {
+        val questions = request.questions.orEmpty().map { it.prompt.trim() }
+        if (request.instructions.isBlank() && questions.isEmpty()) {
+            throw FieldValidationException("instructions", "must not be blank unless the task has questions")
+        }
+        return questions
+    }
 
     /** An active level, or the task's [current] one even if deactivated since; unknown ids are a 400. */
     private fun level(id: Long?, current: Level?): Level? = when (id) {

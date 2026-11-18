@@ -3,7 +3,10 @@ package br.com.educare.api.submission
 import br.com.educare.api.assignment.Assignment
 import br.com.educare.api.tenant.TenantOwnedEntity
 import br.com.educare.api.user.User
+import jakarta.persistence.CollectionTable
 import jakarta.persistence.Column
+import jakarta.persistence.ElementCollection
+import jakarta.persistence.Embeddable
 import jakarta.persistence.Entity
 import jakarta.persistence.FetchType
 import jakarta.persistence.GeneratedValue
@@ -12,8 +15,10 @@ import jakarta.persistence.Id
 import jakarta.persistence.JoinColumn
 import jakarta.persistence.ManyToOne
 import jakarta.persistence.OneToOne
+import jakarta.persistence.OrderColumn
 import jakarta.persistence.Table
 import jakarta.persistence.Version
+import org.hibernate.annotations.BatchSize
 import java.math.BigDecimal
 import java.time.Instant
 
@@ -67,6 +72,18 @@ class Submission(
     var gradedBy: User? = null
         protected set
 
+    /**
+     * For tasks with questions: each prompt as it was at the first submission, with the current answer.
+     * Changing the answers changes [version], like the main answer.
+     */
+    @ElementCollection
+    @CollectionTable(name = "submission_answers", joinColumns = [JoinColumn(name = "submission_id")])
+    @OrderColumn(name = "position")
+    @BatchSize(size = 50)
+    private var answerList: MutableList<SubmissionAnswer> = mutableListOf()
+
+    val answers: List<SubmissionAnswer> get() = answerList.toList()
+
     /** Optimistic lock: a grade never applies to an answer the teacher did not see. */
     @Version
     var version: Long = 0
@@ -77,6 +94,14 @@ class Submission(
         updatedAt = at
     }
 
+    /** Sets the answer of each question; [prompts] are copied the first time and kept afterwards. */
+    fun answerQuestions(prompts: List<String>, answers: List<String>, at: Instant) {
+        require(prompts.size == answers.size) { "One answer per question" }
+        answerList.clear()
+        answerList.addAll(prompts.zip(answers) { prompt, answer -> SubmissionAnswer(prompt, answer) })
+        updatedAt = at
+    }
+
     fun grade(score: BigDecimal, feedback: String, by: User, at: Instant) {
         this.score = score
         this.feedback = feedback
@@ -84,3 +109,13 @@ class Submission(
         gradedAt = at
     }
 }
+
+/** One question of a submission: the prompt as the student saw it and their answer. */
+@Embeddable
+class SubmissionAnswer(
+    @Column(name = "prompt", nullable = false, length = 2000)
+    val prompt: String,
+
+    @Column(name = "answer", nullable = false, length = 5000)
+    val answer: String,
+)

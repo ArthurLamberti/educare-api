@@ -3,7 +3,9 @@ package br.com.educare.api.assignment
 import br.com.educare.api.student.Student
 import br.com.educare.api.task.Task
 import br.com.educare.api.tenant.TenantOwnedEntity
+import jakarta.persistence.CollectionTable
 import jakarta.persistence.Column
+import jakarta.persistence.ElementCollection
 import jakarta.persistence.Entity
 import jakarta.persistence.EnumType
 import jakarta.persistence.Enumerated
@@ -13,7 +15,9 @@ import jakarta.persistence.GenerationType
 import jakarta.persistence.Id
 import jakarta.persistence.JoinColumn
 import jakarta.persistence.ManyToOne
+import jakarta.persistence.OrderColumn
 import jakarta.persistence.Table
+import org.hibernate.annotations.BatchSize
 import java.math.BigDecimal
 import java.time.Instant
 
@@ -56,6 +60,16 @@ class Assignment(
     var answerDraftSavedAt: Instant? = null
         protected set
 
+    /** The draft's answers to the task questions, by position (may be blank). */
+    @ElementCollection
+    @CollectionTable(name = "assignment_draft_answers", joinColumns = [JoinColumn(name = "assignment_id")])
+    @OrderColumn(name = "position")
+    @Column(name = "answer", nullable = false, length = 5000)
+    @BatchSize(size = 50)
+    private var draftAnswerList: MutableList<String> = mutableListOf()
+
+    val answerDraftAnswers: List<String> get() = draftAnswerList.toList()
+
     /** The teacher's private correction (unpublished grade); the student never sees it. */
     @Column(precision = 3, scale = 1)
     var gradeDraftScore: BigDecimal? = null
@@ -70,14 +84,17 @@ class Assignment(
 
     val hasGradeDraft: Boolean get() = gradeDraftSavedAt != null
 
-    fun saveAnswerDraft(answer: String, at: Instant) {
+    fun saveAnswerDraft(answer: String, answers: List<String>, at: Instant) {
         check(status != AssignmentStatus.GRADED) { "Graded work can no longer be changed" }
         answerDraft = answer
+        draftAnswerList.clear()
+        draftAnswerList.addAll(answers)
         answerDraftSavedAt = at
     }
 
     fun clearAnswerDraft() {
         answerDraft = null
+        draftAnswerList.clear()
         answerDraftSavedAt = null
     }
 

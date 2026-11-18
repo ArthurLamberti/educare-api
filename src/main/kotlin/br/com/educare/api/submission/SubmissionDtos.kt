@@ -8,15 +8,26 @@ import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Size
 import java.math.BigDecimal
 
+/**
+ * `answer` is required for tasks without questions; for tasks with questions, `answers` has one
+ * non-blank entry per question in order (max 5000 each) and `answer` is optional.
+ */
 data class SubmitAnswerRequest(
-    @field:NotBlank @field:Size(max = 20000)
-    val answer: String,
+    @field:Size(max = 20000)
+    val answer: String? = null,
+
+    @field:Size(max = 50)
+    val answers: List<String>? = null,
 )
 
 /** The student's private draft; may be blank. */
 data class AnswerDraftRequest(
-    @field:NotNull @field:Size(max = 20000)
-    val answer: String?,
+    @field:Size(max = 20000)
+    val answer: String? = null,
+
+    /** Draft answers to the questions, by position (may be blank, max 5000 each). */
+    @field:Size(max = 50)
+    val answers: List<String>? = null,
 )
 
 /** The teacher's unpublished correction; both fields optional, same rules as a grade when present. */

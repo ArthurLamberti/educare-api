@@ -7,6 +7,7 @@ import br.com.educare.api.assignment.AssignmentStatus
 import br.com.educare.api.assignment.toResponse
 import br.com.educare.api.auth.CurrentUser
 import br.com.educare.api.common.ConflictException
+import br.com.educare.api.common.FieldValidationException
 import br.com.educare.api.common.NotFoundException
 import br.com.educare.api.user.UserRepository
 import org.springframework.data.repository.findByIdOrNull
@@ -43,7 +44,9 @@ class SubmissionService(
         val now = clock.instant()
         val assignment = lock(assignmentId) { it.student.user.id == currentUser.id }
         if (assignment.status == AssignmentStatus.GRADED) throw ConflictException("Graded work can no longer be changed")
-        assignment.saveAnswerDraft(requireNotNull(request.answer), now)
+        val answers = request.answers.orEmpty()
+        if (answers.any { it.length > MAX_QUESTION_ANSWER }) throw tooLong()
+        assignment.saveAnswerDraft(request.answer.orEmpty(), answers, now)
         assignments.flush()
         return assignment.toResponse(now, submissions.findByAssignmentId(assignmentId), currentUser.id)
     }
@@ -51,9 +54,12 @@ class SubmissionService(
     fun submit(assignmentId: Long, request: SubmitAnswerRequest): AssignmentResponse {
         val now = clock.instant()
         val assignment = lock(assignmentId) { it.student.user.id == currentUser.id }
-        val answer = request.answer.trim()
+        val answer = request.answer?.trim().orEmpty()
+        val answers = request.answers.orEmpty().map { it.trim() }
         val submission = when (assignment.status) {
             AssignmentStatus.ASSIGNED -> {
+                val prompts = assignment.task.questions
+                validate(prompts, answer, answers)
                 val created = Submission(
                     assignment = assignment,
                     answer = answer,
@@ -61,10 +67,17 @@ class SubmissionService(
                     submittedAt = now,
                     late = assignment.dueAt?.isBefore(now) == true,
                 )
+                if (prompts.isNotEmpty()) created.answerQuestions(prompts, answers, now)
                 assignment.submitted()
                 submissions.save(created)
             }
-            AssignmentStatus.SUBMITTED -> current(assignment).also { it.editAnswer(answer, now) }
+            AssignmentStatus.SUBMITTED -> current(assignment).also {
+                // Later submissions answer the questions copied at the first one.
+                val prompts = it.answers.map { a -> a.prompt }
+                validate(prompts, answer, answers)
+                it.editAnswer(answer, now)
+                if (prompts.isNotEmpty()) it.answerQuestions(prompts, answers, now)
+            }
             AssignmentStatus.GRADED -> throw ConflictException("Graded work can no longer be changed")
         }
         assignment.clearAnswerDraft()
@@ -103,10 +116,28 @@ class SubmissionService(
         return submission
     }
 
+    /** Without questions the main answer is required; with questions, one non-blank answer per question. */
+    private fun validate(prompts: List<String>, answer: String, answers: List<String>) {
+        if (prompts.isEmpty()) {
+            if (answers.isNotEmpty()) throw FieldValidationException("answers", "This task has no questions")
+            if (answer.isBlank()) throw FieldValidationException("answer", "must not be blank")
+            return
+        }
+        if (answers.size != prompts.size) throw FieldValidationException("answers", "Answer each of the ${prompts.size} questions")
+        if (answers.any { it.isBlank() }) throw FieldValidationException("answers", "Answer every question")
+        if (answers.any { it.length > MAX_QUESTION_ANSWER }) throw tooLong()
+    }
+
+    private fun tooLong() = FieldValidationException("answers", "Each answer can have at most $MAX_QUESTION_ANSWER characters")
+
     private fun current(assignment: Assignment): Submission =
         submissions.findByAssignmentId(requireNotNull(assignment.id)) ?: error("Assignment ${assignment.id} has no submission")
 
     /** Row lock: a student's edit and a grade on the same assignment run one after the other. */
     private fun lock(id: Long, allowed: (Assignment) -> Boolean): Assignment =
         assignments.findForUpdate(id)?.takeIf(allowed) ?: throw NotFoundException("Assignment $id not found")
+
+    companion object {
+        const val MAX_QUESTION_ANSWER = 5000
+    }
 }
