@@ -1,5 +1,6 @@
 package br.com.educare.api.task
 
+import br.com.educare.api.level.Level
 import br.com.educare.api.tenant.TenantOwnedEntity
 import br.com.educare.api.user.User
 import jakarta.persistence.Column
@@ -23,6 +24,7 @@ class Task(
 
     title: String,
     instructions: String,
+    level: Level? = null,
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -40,6 +42,12 @@ class Task(
     var instructions: String = instructions
         protected set
 
+    /** Optional level of the scale (see Level). */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "level_id")
+    var level: Level? = level
+        protected set
+
     /** Archived tasks are hidden from the default list and cannot be assigned. */
     @Column(nullable = false)
     var archived: Boolean = false
@@ -49,9 +57,10 @@ class Task(
     var updatedAt: Instant = createdAt
         protected set
 
-    fun edit(title: String, instructions: String) {
+    fun edit(title: String, instructions: String, level: Level?) {
         this.title = title
         this.instructions = instructions
+        this.level = level
         updatedAt = Instant.now()
     }
 

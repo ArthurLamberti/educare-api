@@ -6,8 +6,9 @@ student. Today the scale is CEFR (A1 to C2), but it may change later (another sc
 so the levels must be data, not code.
 
 ## What Changes
-- A `levels` table (code, name, position, active), seeded with the CEFR scale: A1 Beginner,
-  A2 Elementary, B1 Intermediate, B2 Upper intermediate, C1 Advanced, C2 Proficiency.
+- A `levels` table (code, name, position, active), seeded with the CEFR scale: A1 Iniciante,
+  A2 Básico, B1 Intermediário, B2 Intermediário superior, C1 Avançado, C2 Proficiente (names are display
+  content in Portuguese, unlike API messages).
 - `GET /api/levels`: the active levels in order, for any signed-in user. Clients never hard-code the scale.
 - Tasks get an optional `levelId` (must be an active level). Task and assignment responses carry
   `level { id, code, name }`. `GET /api/tasks` and `GET /api/assignments` accept a `levelId` filter.

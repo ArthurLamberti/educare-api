@@ -1,5 +1,7 @@
 package br.com.educare.api.assignment
 
+import br.com.educare.api.level.LevelResponse
+import br.com.educare.api.level.toResponse
 import br.com.educare.api.submission.Submission
 import jakarta.validation.constraints.NotEmpty
 import jakarta.validation.constraints.Size
@@ -19,6 +21,8 @@ data class AssignmentResponse(
     val taskId: Long,
     val taskTitle: String,
     val instructions: String,
+    /** The task's level, if any. */
+    val level: LevelResponse?,
     val teacherId: Long,
     val teacherName: String,
     val studentId: Long,
@@ -87,6 +91,7 @@ fun Assignment.toResponse(now: Instant, submission: Submission?, viewerId: Long)
         taskId = requireNotNull(task.id),
         taskTitle = task.title,
         instructions = task.instructions,
+        level = task.level?.toResponse(),
         teacherId = requireNotNull(task.teacher.id),
         teacherName = task.teacher.name,
         studentId = requireNotNull(student.id),

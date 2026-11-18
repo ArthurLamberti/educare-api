@@ -25,6 +25,7 @@ data class AssignmentFilter(
     val statuses: List<AssignmentStatus> = emptyList(),
     val studentId: Long? = null,
     val taskId: Long? = null,
+    val levelId: Long? = null,
 )
 
 /**
@@ -132,6 +133,7 @@ class AssignmentService(
             studentId?.takeIf { currentUser.role != Role.STUDENT }
                 ?.let { add(cb.equal(root.get<Any>("student").get<Long>("id"), it)) }
             taskId?.let { add(cb.equal(root.get<Any>("task").get<Long>("id"), it)) }
+            levelId?.let { add(cb.equal(root.get<Any>("task").get<Any>("level").get<Long>("id"), it)) }
         }
         cb.and(*predicates.toTypedArray())
     }

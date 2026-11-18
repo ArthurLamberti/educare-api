@@ -3,7 +3,10 @@ package br.com.educare.api.task
 import br.com.educare.api.assignment.AssignmentRepository
 import br.com.educare.api.auth.CurrentUser
 import br.com.educare.api.common.ConflictException
+import br.com.educare.api.common.FieldValidationException
 import br.com.educare.api.common.NotFoundException
+import br.com.educare.api.level.Level
+import br.com.educare.api.level.LevelRepository
 import br.com.educare.api.user.UserRepository
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
@@ -19,15 +22,17 @@ class TaskService(
     private val tasks: TaskRepository,
     private val assignments: AssignmentRepository,
     private val users: UserRepository,
+    private val levels: LevelRepository,
     private val currentUser: CurrentUser,
 ) {
 
-    fun list(q: String?, includeArchived: Boolean, pageable: Pageable): Page<TaskResponse> {
+    fun list(q: String?, includeArchived: Boolean, pageable: Pageable, levelId: Long? = null): Page<TaskResponse> {
         val teacherId = currentUser.id
         val spec = Specification<Task> { root, _, cb ->
             val predicates = buildList {
                 add(cb.equal(root.get<Any>("teacher").get<Long>("id"), teacherId))
                 if (!includeArchived) add(cb.isFalse(root.get("archived")))
+                levelId?.let { add(cb.equal(root.get<Any>("level").get<Long>("id"), it)) }
                 q?.trim()?.takeIf { it.isNotEmpty() }?.let {
                     add(cb.like(cb.lower(root.get("title")), "%${escapeLike(it.lowercase())}%", '\\'))
                 }
@@ -46,14 +51,19 @@ class TaskService(
     @Transactional
     fun create(request: TaskRequest): TaskResponse {
         val teacher = users.findByIdOrNull(currentUser.id) ?: throw NotFoundException("User not found")
-        val task = Task(teacher = teacher, title = request.title.trim(), instructions = request.instructions.trim())
+        val task = Task(
+            teacher = teacher,
+            title = request.title.trim(),
+            instructions = request.instructions.trim(),
+            level = level(request.levelId, current = null),
+        )
         return tasks.saveAndFlush(task).toResponse(0)
     }
 
     @Transactional
     fun update(id: Long, request: TaskRequest): TaskResponse {
         val task = findOwn(id)
-        task.edit(request.title.trim(), request.instructions.trim())
+        task.edit(request.title.trim(), request.instructions.trim(), level(request.levelId, current = task.level))
         return task.toResponse(assignments.countByTaskId(id))
     }
 
@@ -78,6 +88,13 @@ class TaskService(
     fun findOwn(id: Long): Task =
         tasks.findByIdOrNull(id)?.takeIf { it.teacher.id == currentUser.id }
             ?: throw NotFoundException("Task $id not found")
+
+    /** An active level, or the task's [current] one even if deactivated since; unknown ids are a 400. */
+    private fun level(id: Long?, current: Level?): Level? = when (id) {
+        null -> null
+        current?.id -> current
+        else -> levels.findByIdOrNull(id)?.takeIf { it.active } ?: throw FieldValidationException("levelId", "Unknown level")
+    }
 
     private fun escapeLike(value: String) = value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 }

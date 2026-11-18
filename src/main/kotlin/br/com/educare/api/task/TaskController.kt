@@ -25,13 +25,14 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder
 @PreAuthorize("hasRole('TEACHER')")
 class TaskController(private val service: TaskService) {
 
-    /** Newest first; `q` searches the title. */
+    /** Newest first; `q` searches the title; `levelId` keeps one level. */
     @GetMapping
     fun list(
         @PageableDefault(size = 20, sort = ["createdAt", "id"], direction = Sort.Direction.DESC) pageable: Pageable,
         @RequestParam(required = false) q: String?,
         @RequestParam(defaultValue = "false") includeArchived: Boolean,
-    ): Page<TaskResponse> = service.list(q, includeArchived, pageable)
+        @RequestParam(required = false) levelId: Long?,
+    ): Page<TaskResponse> = service.list(q, includeArchived, pageable, levelId)
 
     @GetMapping("/{id}")
     fun get(@PathVariable id: Long): TaskResponse = service.get(id)
